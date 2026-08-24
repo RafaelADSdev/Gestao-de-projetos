@@ -7,3 +7,6 @@ out/
 coverage/
 *.tsbuildinfo
 pnpm-debug.log*
+
+.vercel
+.env*
