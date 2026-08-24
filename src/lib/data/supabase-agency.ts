@@ -594,7 +594,7 @@ export async function loadSupabaseAgencyData(
       financialsResult,
       "custos de assinaturas",
     );
-    administrativeExpenses = requireRows<AdministrativeExpenseRow>(
+    administrativeExpenses = requireRowsAllowMissingTable<AdministrativeExpenseRow>(
       expensesResult,
       "despesas administrativas",
     ).map(mapAdministrativeExpense);
@@ -1044,6 +1044,19 @@ function requireRows<T>(result: unknown, label: string): T[] {
   const typed = result as QueryResult<T[]>;
   assertQuery(typed.error, label);
   return typed.data ?? [];
+}
+
+/**
+ * Keeps older production databases readable while the administrative-expenses
+ * migration is being rolled out. Every other database error remains fatal so
+ * a real outage is not hidden behind an empty finance panel.
+ */
+function requireRowsAllowMissingTable<T>(result: unknown, label: string): T[] {
+  const typed = result as QueryResult<T[]>;
+  if (typed.error?.code === "PGRST205" && typed.error.message?.includes("administrative_expenses")) {
+    return [];
+  }
+  return requireRows<T>(result, label);
 }
 
 function requireRecord<T>(result: unknown, label: string): T {

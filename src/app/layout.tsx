@@ -23,6 +23,10 @@ export const metadata: Metadata = {
   title: { default: APP_NAME, template: `%s · ${APP_NAME}` },
   description: APP_TAGLINE,
   robots: { index: false, follow: false },
+  icons: {
+    icon: "/tekton-logo.png",
+    apple: "/tekton-logo.png",
+  },
   openGraph: {
     type: "website",
     locale: "pt_BR",

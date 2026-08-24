@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Bell, ChevronDown, Plus, Search } from "lucide-react";
 import type { AuthContext } from "@/lib/auth";
 import { canSeeFinance } from "@/lib/auth";
-import { APP_MONOGRAM, APP_SHORT_NAME } from "@/lib/domain/constants";
+import { APP_SHORT_NAME } from "@/lib/domain/constants";
 import { BrandLockup, BrandMark } from "@/components/brand-lockup";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { MobileNav } from "./mobile-nav";
@@ -15,7 +15,7 @@ export function AppShell({ context, children }: { context: AuthContext; children
       <aside className="sidebar">
         <BrandLockup label={`${context.workspaceName} — início`} />
         <div className="workspace-chip">
-          <span className="workspace-avatar">{APP_MONOGRAM}</span>
+          <BrandMark size="sm" />
           <span><strong>{context.workspaceName}</strong><small>Workspace principal</small></span>
           <ChevronDown size={15} aria-hidden="true" />
         </div>

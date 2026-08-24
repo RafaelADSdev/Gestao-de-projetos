@@ -119,6 +119,12 @@ function administrativeExpenseValues(formData: FormData) {
   };
 }
 
+function administrativeExpenseMigrationMessage(error: { code?: string; message?: string } | null) {
+  return error?.code === "PGRST205" && error.message?.includes("administrative_expenses")
+    ? "A tabela de despesas ainda não foi criada no Supabase. Execute a migração administrative_expenses antes de cadastrar."
+    : null;
+}
+
 function validHexColor(value: string) {
   return /^#[0-9A-Fa-f]{6}$/.test(value);
 }
@@ -1297,6 +1303,8 @@ export async function createAdministrativeExpenseAction(formData: FormData): Pro
     .insert({ workspace_id: context.workspaceId, ...parsed.value })
     .select("id")
     .single();
+  const migrationMessage = administrativeExpenseMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
   if (error) return { ok: false, error: "Não foi possível cadastrar a despesa administrativa." };
   revalidatePath("/financeiro");
   revalidatePath("/");
@@ -1325,6 +1333,8 @@ export async function updateAdministrativeExpenseAction(
     .eq("id", expenseId)
     .select("id")
     .maybeSingle();
+  const migrationMessage = administrativeExpenseMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
   if (error) return { ok: false, error: "Não foi possível atualizar a despesa administrativa." };
   if (!data) return { ok: false, error: "Despesa não encontrada neste workspace." };
   revalidatePath("/financeiro");
@@ -1357,6 +1367,8 @@ export async function deleteAdministrativeExpenseAction(expenseId: string): Prom
     .eq("id", expenseId)
     .select("id")
     .maybeSingle();
+  const migrationMessage = administrativeExpenseMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
   if (error) return { ok: false, error: "Não foi possível excluir a despesa administrativa." };
   if (!deleted) return { ok: false, error: "A despesa não foi excluída; confirme suas permissões." };
   revalidatePath("/financeiro");

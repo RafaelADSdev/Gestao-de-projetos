@@ -1,15 +1,28 @@
+import Image from "next/image";
 import Link from "next/link";
-import { APP_NAME_SUFFIX, APP_SHORT_NAME } from "@/lib/domain/constants";
+import { APP_LOGO_SRC, APP_NAME_SUFFIX, APP_SHORT_NAME } from "@/lib/domain/constants";
 
 type BrandMarkSize = "sm" | "md" | "lg";
 
+const LOGO_SIZES: Record<BrandMarkSize, number> = {
+  sm: 32,
+  md: 38,
+  lg: 48,
+};
+
 export function BrandMark({ size = "md" }: { size?: BrandMarkSize }) {
+  const px = LOGO_SIZES[size];
+
   return (
-    <span className={`brand-mark brand-mark--${size}`} aria-hidden="true">
-      <span className="brand-mark-core">
-        <span className="brand-mark-letters">TD</span>
-        <span className="brand-mark-slash">/&gt;</span>
-      </span>
+    <span className={`brand-mark brand-mark--${size}`}>
+      <Image
+        src={APP_LOGO_SRC}
+        alt=""
+        width={px}
+        height={px}
+        className="brand-mark-image"
+        priority={size !== "sm"}
+      />
     </span>
   );
 }

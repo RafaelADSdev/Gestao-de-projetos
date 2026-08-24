@@ -4,6 +4,7 @@ export const APP_NAME = "Tekton Digital — Soluções Web e Desenvolvimento de 
 export const APP_SHORT_NAME = "Tekton Digital";
 export const APP_NAME_SUFFIX = "Soluções Web e Desenvolvimento de Sistemas";
 export const APP_MONOGRAM = "TD";
+export const APP_LOGO_SRC = "/tekton-logo.png";
 export const APP_TAGLINE = "Projetos, prazos e recorrências em um só lugar.";
 export const DEFAULT_LOCALE = "pt-BR";
 export const DEFAULT_TIME_ZONE = "America/Sao_Paulo";
