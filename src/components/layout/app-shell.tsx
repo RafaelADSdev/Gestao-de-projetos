@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Bell, ChevronDown, Command, Plus, Search } from "lucide-react";
+import { Bell, ChevronDown, Plus, Search } from "lucide-react";
 import type { AuthContext } from "@/lib/auth";
 import { canSeeFinance } from "@/lib/auth";
-import { APP_NAME_SUFFIX, APP_SHORT_NAME } from "@/lib/domain/constants";
+import { APP_MONOGRAM, APP_SHORT_NAME } from "@/lib/domain/constants";
+import { BrandLockup, BrandMark } from "@/components/brand-lockup";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { MobileNav } from "./mobile-nav";
 import { SidebarNav } from "./sidebar-nav";
@@ -12,12 +13,9 @@ export function AppShell({ context, children }: { context: AuthContext; children
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link href="/" className="brand" aria-label={`${context.workspaceName} — início`}>
-          <span className="brand-mark"><Command size={21} aria-hidden="true" /></span>
-          <span><strong>{APP_SHORT_NAME}</strong><small>{APP_NAME_SUFFIX}</small></span>
-        </Link>
+        <BrandLockup label={`${context.workspaceName} — início`} />
         <div className="workspace-chip">
-          <span className="workspace-avatar">CA</span>
+          <span className="workspace-avatar">{APP_MONOGRAM}</span>
           <span><strong>{context.workspaceName}</strong><small>Workspace principal</small></span>
           <ChevronDown size={15} aria-hidden="true" />
         </div>
@@ -36,7 +34,7 @@ export function AppShell({ context, children }: { context: AuthContext; children
           </div>
         )}
         <header className="topbar">
-          <div className="mobile-brand"><span className="brand-mark"><Command size={18} /></span><strong>{APP_SHORT_NAME}</strong></div>
+          <div className="mobile-brand"><BrandMark size="sm" /><strong>{APP_SHORT_NAME}</strong></div>
           <form className="global-search" action="/projetos">
             <Search size={18} aria-hidden="true" />
             <label className="sr-only" htmlFor="global-project-search">Buscar projetos</label>

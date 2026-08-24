@@ -344,7 +344,7 @@ export function WorkflowAdmin({ data, selectedWorkflowId }: { data: AgencyData; 
             <SettingsActionForm action={createTechnologyAction} className="form-grid two" submitLabel="Criar tecnologia" successMessage="Tecnologia criada.">
               <label className="form-field"><span>Nome</span><input className="input" name="name" minLength={2} maxLength={80} required /></label>
               <label className="form-field"><span>Categoria</span><select className="input" name="category" defaultValue="other">{Object.entries(CATEGORY_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-              <label className="form-field"><span>Cor hexadecimal</span><input className="input" name="color" defaultValue="#2563EB" pattern="#[0-9A-Fa-f]{6}" required /></label>
+              <label className="form-field"><span>Cor hexadecimal</span><input className="input" name="color" defaultValue="#7C5CE0" pattern="#[0-9A-Fa-f]{6}" required /></label>
               <label className="form-field"><span>Site oficial</span><input className="input" name="website_url" type="url" placeholder="https://…" /></label>
             </SettingsActionForm>
           </div>

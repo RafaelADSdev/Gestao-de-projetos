@@ -13,6 +13,7 @@ no Kanban e mantém o sistema como fonte de verdade para o Google Agenda.
 - Exclusão permanente dos registros operacionais com confirmação, regras de dependência e rastreabilidade.
 - Log automático e imutável de criação, edição e exclusão, com autor, horário, entidade e campos alterados.
 - Clientes, calendário, financeiro protegido e configurações da equipe.
+- Despesas administrativas separadas das assinaturas, com ciclo, vencimento, status, edição e exclusão auditada.
 - Página completa do projeto: resumo, fluxo/sprint, stack tecnológica, checklist/prazos, links/GitHub, financeiro/assinaturas e histórico.
 - Modelos de site institucional, plataforma de cursos e manutenção.
 - Gestão de acessos pelo proprietário, com nome completo, papel, suspensão e exclusão.
@@ -60,6 +61,11 @@ corepack pnpm build
 4. Faça o primeiro login e associe o UUID do usuário proprietário ao workspace
    inicial seguindo `supabase/README.md`. O bootstrap é deliberadamente manual
    para impedir que um usuário não autorizado reivindique a empresa.
+   No provedor Google do Supabase, informe o Client ID e o Client Secret criados
+   no Google Cloud. No Google Cloud, a URI de callback autorizada deve ser a URL
+   do callback do próprio projeto Supabase, exibida na tela do provedor Google;
+   a URL da aplicação (`http://localhost:3000/auth/callback`) entra na lista de
+   Redirect URLs do Supabase.
 5. A migração de acessos cria o bucket público `avatars`, limitado a imagens de
    até 2 MB. Somente o próprio usuário pode gravar ou excluir arquivos em sua pasta.
 

@@ -10,6 +10,9 @@ export type ActionResult = { ok: true; demo?: boolean; id?: string; message?: st
 const WORKFLOW_REVALIDATION_PATHS = ["/quadro", "/projetos", "/configuracoes/fluxos"] as const;
 const TECHNOLOGY_CATEGORIES = new Set(["frontend", "backend", "database", "infrastructure", "design", "analytics", "other"]);
 const SPRINT_STATUSES = new Set(["planned", "active", "completed"]);
+const ADMINISTRATIVE_EXPENSE_CATEGORIES = new Set(["people", "software", "marketing", "office", "taxes", "banking", "other"]);
+const ADMINISTRATIVE_EXPENSE_CYCLES = new Set(["monthly", "quarterly", "semiannual", "annual", "one-time"]);
+const ADMINISTRATIVE_EXPENSE_STATUSES = new Set(["active", "paused", "canceled"]);
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -68,6 +71,52 @@ function validIsoDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function administrativeExpenseValues(formData: FormData) {
+  const name = text(formData, "name");
+  const category = text(formData, "category") || "other";
+  const amountCents = moneyInCents(formData, "amount");
+  const billingCycle = text(formData, "billing_cycle") || "monthly";
+  const dueDate = optionalText(formData, "due_date");
+  const status = text(formData, "status") || "active";
+  const notes = optionalText(formData, "notes");
+
+  if (name.length < 2 || name.length > 120) {
+    return { ok: false as const, error: "Informe um nome de despesa entre 2 e 120 caracteres." };
+  }
+  if (amountCents === null) {
+    return { ok: false as const, error: "Informe um valor v\u00e1lido para a despesa." };
+  }
+  if (!ADMINISTRATIVE_EXPENSE_CATEGORIES.has(category)) {
+    return { ok: false as const, error: "Escolha uma categoria de despesa v\u00e1lida." };
+  }
+  if (!ADMINISTRATIVE_EXPENSE_CYCLES.has(billingCycle)) {
+    return { ok: false as const, error: "Escolha um ciclo de cobran\u00e7a v\u00e1lido." };
+  }
+  if (!ADMINISTRATIVE_EXPENSE_STATUSES.has(status)) {
+    return { ok: false as const, error: "Escolha um status v\u00e1lido." };
+  }
+  if (dueDate && !validIsoDate(dueDate)) {
+    return { ok: false as const, error: "Informe uma data de vencimento v\u00e1lida." };
+  }
+  if (notes && notes.length > 500) {
+    return { ok: false as const, error: "As observa\u00e7\u00f5es podem ter no m\u00e1ximo 500 caracteres." };
+  }
+
+  return {
+    ok: true as const,
+    value: {
+      name,
+      category,
+      amount_cents: amountCents,
+      currency: "BRL",
+      billing_cycle: billingCycle,
+      due_date: dueDate,
+      status,
+      notes,
+    },
+  };
 }
 
 function validHexColor(value: string) {
@@ -1230,6 +1279,89 @@ export async function deleteSubscriptionAction(subscriptionId: string): Promise<
   revalidatePath("/");
   await tryImmediateCalendarSync(context.workspaceId);
   return { ok: true, message: `Assinatura “${subscription.service_name}” excluída de ${projectIds.length} projeto(s).` };
+}
+
+export async function createAdministrativeExpenseAction(formData: FormData): Promise<ActionResult> {
+  const context = await requireAdminContext();
+  const parsed = administrativeExpenseValues(formData);
+  if (!parsed.ok) return parsed;
+  if (context.demo) {
+    revalidatePath("/financeiro");
+    revalidatePath("/");
+    return { ok: true, demo: true, message: "Despesa simulada cadastrada." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("administrative_expenses")
+    .insert({ workspace_id: context.workspaceId, ...parsed.value })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: "Não foi possível cadastrar a despesa administrativa." };
+  revalidatePath("/financeiro");
+  revalidatePath("/");
+  return { ok: true, id: data.id, message: "Despesa administrativa criada." };
+}
+
+export async function updateAdministrativeExpenseAction(
+  expenseId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const context = await requireAdminContext();
+  if (!expenseId) return { ok: false, error: "Despesa não informada." };
+  const parsed = administrativeExpenseValues(formData);
+  if (!parsed.ok) return parsed;
+  if (context.demo) {
+    revalidatePath("/financeiro");
+    revalidatePath("/");
+    return { ok: true, demo: true, message: "Despesa simulada atualizada." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("administrative_expenses")
+    .update(parsed.value)
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", expenseId)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, error: "Não foi possível atualizar a despesa administrativa." };
+  if (!data) return { ok: false, error: "Despesa não encontrada neste workspace." };
+  revalidatePath("/financeiro");
+  revalidatePath("/");
+  return { ok: true, id: data.id, message: "Despesa administrativa atualizada." };
+}
+
+export async function deleteAdministrativeExpenseAction(expenseId: string): Promise<ActionResult> {
+  const context = await requireAdminContext();
+  if (!expenseId) return { ok: false, error: "Despesa não informada." };
+  if (context.demo) {
+    revalidatePath("/financeiro");
+    revalidatePath("/");
+    return { ok: true, demo: true, message: "Exclusão simulada na demonstração." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: expense } = await supabase
+    .from("administrative_expenses")
+    .select("id, name")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", expenseId)
+    .maybeSingle();
+  if (!expense) return { ok: false, error: "Despesa não encontrada neste workspace." };
+
+  const { data: deleted, error } = await supabase
+    .from("administrative_expenses")
+    .delete()
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", expenseId)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, error: "Não foi possível excluir a despesa administrativa." };
+  if (!deleted) return { ok: false, error: "A despesa não foi excluída; confirme suas permissões." };
+  revalidatePath("/financeiro");
+  revalidatePath("/");
+  return { ok: true, message: `Despesa “${expense.name}” excluída.` };
 }
 
 export async function deleteWorkflowAction(workflowId: string): Promise<ActionResult> {

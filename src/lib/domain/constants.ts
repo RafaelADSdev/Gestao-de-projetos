@@ -1,8 +1,9 @@
 import type { BoardStage, ProjectTemplate } from "./types";
 
-export const APP_NAME = "Central da Agência";
-export const APP_SHORT_NAME = APP_NAME.split(" ")[0];
-export const APP_NAME_SUFFIX = APP_NAME.slice(APP_SHORT_NAME.length).trim();
+export const APP_NAME = "Tekton Digital — Soluções Web e Desenvolvimento de Sistemas";
+export const APP_SHORT_NAME = "Tekton Digital";
+export const APP_NAME_SUFFIX = "Soluções Web e Desenvolvimento de Sistemas";
+export const APP_MONOGRAM = "TD";
 export const APP_TAGLINE = "Projetos, prazos e recorrências em um só lugar.";
 export const DEFAULT_LOCALE = "pt-BR";
 export const DEFAULT_TIME_ZONE = "America/Sao_Paulo";

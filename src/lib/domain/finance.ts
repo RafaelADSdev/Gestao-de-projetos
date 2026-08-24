@@ -1,10 +1,10 @@
 import { DEFAULT_LOCALE } from "./constants";
 import type {
+  AdministrativeExpense,
   BillingCycle,
   CommercialTerms,
   CurrencyCode,
   Subscription,
-  SubscriptionCategory,
 } from "./types";
 
 const MONTHS_PER_CYCLE: Readonly<Record<BillingCycle, number | null>> = {
@@ -73,6 +73,15 @@ export function calculateMonthlyRecurringCosts(
   }, 0);
 }
 
+export function calculateMonthlyAdministrativeExpenses(
+  expenses: readonly AdministrativeExpense[],
+): number {
+  return expenses.reduce((total, expense) => {
+    if (expense.status !== "active") return total;
+    return total + monthlyEquivalentCents(expense.amountCents, expense.billingCycle);
+  }, 0);
+}
+
 export interface FinancialSummary {
   currency: CurrencyCode;
   monthlyRecurringRevenueCents: number;
@@ -84,9 +93,12 @@ export interface FinancialSummary {
 export function calculateFinancialSummary(
   terms: readonly CommercialTerms[],
   subscriptions: readonly Subscription[],
+  administrativeExpenses: readonly AdministrativeExpense[] = [],
 ): FinancialSummary {
   const monthlyRecurringRevenueCents = calculateMonthlyRecurringRevenue(terms);
-  const monthlyRecurringCostCents = calculateMonthlyRecurringCosts(subscriptions);
+  const monthlyRecurringCostCents =
+    calculateMonthlyRecurringCosts(subscriptions) +
+    calculateMonthlyAdministrativeExpenses(administrativeExpenses);
   const monthlyMarginCents = monthlyRecurringRevenueCents - monthlyRecurringCostCents;
   const marginPercent =
     monthlyRecurringRevenueCents === 0
@@ -104,14 +116,20 @@ export function calculateFinancialSummary(
 
 export function calculateMonthlyCostsByCategory(
   subscriptions: readonly Subscription[],
-): Record<SubscriptionCategory, number> {
-  const result: Record<SubscriptionCategory, number> = {
+  administrativeExpenses: readonly AdministrativeExpense[] = [],
+): Record<string, number> {
+  const result: Record<string, number> = {
     domain: 0,
     hosting: 0,
     email: 0,
     video: 0,
     software: 0,
     other: 0,
+    people: 0,
+    marketing: 0,
+    office: 0,
+    taxes: 0,
+    banking: 0,
   };
 
   for (const subscription of subscriptions) {
@@ -123,6 +141,11 @@ export function calculateMonthlyCostsByCategory(
     }
   }
 
+  for (const expense of administrativeExpenses) {
+    if (expense.status === "active") {
+      result[expense.category] += monthlyEquivalentCents(expense.amountCents, expense.billingCycle);
+    }
+  }
+
   return result;
 }
-

@@ -22,7 +22,7 @@ export default async function ProfileSettingsPage() {
       <section className="profile-settings-layout">
         <article className="panel profile-identity-card">
           <div className="profile-avatar-preview"><ProfileAvatar name={context.name} src={context.avatarUrl} size={92} /><span><Camera size={15} /> JPG, PNG ou WebP · até 2 MB</span></div>
-          <div><span className="eyebrow">Identidade na Central</span><h2>{context.name}</h2><p>{context.email}</p><span className={`role-badge ${context.role}`}>{context.role === "owner" ? "Proprietário" : context.role === "admin" ? "Administrador" : "Membro"}</span></div>
+          <div><span className="eyebrow">Identidade na Tekton</span><h2>{context.name}</h2><p>{context.email}</p><span className={`role-badge ${context.role}`}>{context.role === "owner" ? "Proprietário" : context.role === "admin" ? "Administrador" : "Membro"}</span></div>
         </article>
 
         <div className="profile-settings-main">

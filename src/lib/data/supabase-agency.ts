@@ -2,6 +2,7 @@ import "server-only";
 
 import { canSeeFinance, type AuthContext } from "@/lib/auth";
 import type {
+  AdministrativeExpense,
   ActivityEntry,
   AgencyData,
   AuditLogEntry,
@@ -226,6 +227,21 @@ type SubscriptionFinancialRow = {
   agency_share_percent: number | string;
   billing_cycle: string;
   vault_reference: string | null;
+};
+
+type AdministrativeExpenseRow = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  category: string;
+  amount_cents: number | string;
+  currency: string;
+  billing_cycle: string;
+  due_date: string | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type ProjectSubscriptionRow = {
@@ -537,6 +553,7 @@ export async function loadSupabaseAgencyData(
 
   let commercialTerms: CommercialTerms[] = [];
   let subscriptionFinancials: SubscriptionFinancialRow[] = [];
+  let administrativeExpenses: AdministrativeExpense[] = [];
   let auditLog: AuditLogEntry[] = [];
   let calendarConnections: CalendarConnection[] = [];
   let calendarEventMappings: CalendarEventMapping[] = [];
@@ -546,7 +563,7 @@ export async function loadSupabaseAgencyData(
   // authoritative backstop, while this branch avoids accidental disclosure in
   // logs, timing, or future relaxed policies.
   if (canSeeFinance(context.role)) {
-    const [termsResult, financialsResult] = await Promise.all([
+    const [termsResult, financialsResult, expensesResult] = await Promise.all([
       supabase
         .from("commercial_terms")
         .select(
@@ -559,6 +576,14 @@ export async function loadSupabaseAgencyData(
           "subscription_id, amount_cents, currency, agency_share_percent, billing_cycle, vault_reference",
         )
         .eq("workspace_id", workspaceId),
+      supabase
+        .from("administrative_expenses")
+        .select(
+          "id, workspace_id, name, category, amount_cents, currency, billing_cycle, due_date, status, notes, created_at, updated_at",
+        )
+        .eq("workspace_id", workspaceId)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .order("name", { ascending: true }),
     ]);
 
     commercialTerms = requireRows<CommercialTermsRow>(
@@ -569,6 +594,10 @@ export async function loadSupabaseAgencyData(
       financialsResult,
       "custos de assinaturas",
     );
+    administrativeExpenses = requireRows<AdministrativeExpenseRow>(
+      expensesResult,
+      "despesas administrativas",
+    ).map(mapAdministrativeExpense);
   }
 
   // Calendar integration metadata is admin-only in the database policy.
@@ -650,6 +679,7 @@ export async function loadSupabaseAgencyData(
     resources,
     commercialTerms,
     subscriptions,
+    administrativeExpenses,
     projectSubscriptions,
     activity,
     auditLog,
@@ -875,6 +905,35 @@ function mapSubscription(
     vaultReference: financial?.vault_reference ?? null,
     status:
       row.status === "paused" || row.status === "canceled" ? row.status : "active",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapAdministrativeExpense(row: AdministrativeExpenseRow): AdministrativeExpense {
+  const category: AdministrativeExpense["category"] =
+    row.category === "people" ||
+    row.category === "software" ||
+    row.category === "marketing" ||
+    row.category === "office" ||
+    row.category === "taxes" ||
+    row.category === "banking"
+      ? row.category
+      : "other";
+  const billingCycle = commercialCycle(row.billing_cycle) ?? "monthly";
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    category,
+    amountCents: cents(row.amount_cents),
+    currency: currency(row.currency),
+    billingCycle,
+    dueDate: dateOnly(row.due_date),
+    status:
+      row.status === "paused" || row.status === "canceled" ? row.status : "active",
+    notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

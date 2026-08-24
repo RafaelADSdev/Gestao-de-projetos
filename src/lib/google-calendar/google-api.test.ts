@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { GoogleCalendarApi } from "./google-api";
+import { GOOGLE_CALENDAR_NAME } from "./types";
 
 describe("GoogleCalendarApi", () => {
   it("creates the dedicated secondary calendar", async () => {
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       expect(init?.method).toBe("POST");
       expect(JSON.parse(String(init?.body))).toMatchObject({
-        summary: "Central da Agência — Prazos",
+        summary: GOOGLE_CALENDAR_NAME,
         timeZone: "America/Sao_Paulo",
       });
       return Response.json({ id: "calendar-id" });

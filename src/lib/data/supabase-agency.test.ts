@@ -108,6 +108,7 @@ describe("loadSupabaseAgencyData", () => {
         vault_reference: "Cofre > Hostinger",
       },
     ];
+    rows.administrative_expenses = [];
     rows.calendar_connections = [];
     rows.calendar_event_mappings = [];
     rows.calendar_sync_jobs = [];
@@ -128,6 +129,7 @@ describe("loadSupabaseAgencyData", () => {
 
     expect(calls).not.toContain("commercial_terms");
     expect(calls).not.toContain("subscription_financials");
+    expect(calls).not.toContain("administrative_expenses");
     expect(calls).not.toContain("audit_log");
     expect(data.commercialTerms).toEqual([]);
     expect(data.auditLog).toEqual([]);

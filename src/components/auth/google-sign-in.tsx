@@ -27,7 +27,12 @@ export function GoogleSignIn() {
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (authError) {
-      setError("Não foi possível iniciar o login. Confira a configuração do Google no Supabase.");
+      const normalizedMessage = authError.message.toLocaleLowerCase("pt-BR");
+      setError(
+        normalizedMessage.includes("provider is not enabled")
+          ? "O login com Google ainda não está habilitado no Supabase. Ative o provedor Google e tente novamente."
+          : "Não foi possível iniciar o login. Confira a configuração do Google no Supabase.",
+      );
       setLoading(false);
     }
   }

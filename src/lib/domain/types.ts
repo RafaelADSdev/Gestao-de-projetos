@@ -282,6 +282,32 @@ export interface Subscription {
   updatedAt: ISODateTime;
 }
 
+export type AdministrativeExpenseCategory =
+  | "people"
+  | "software"
+  | "marketing"
+  | "office"
+  | "taxes"
+  | "banking"
+  | "other";
+
+export type AdministrativeExpenseStatus = "active" | "paused" | "canceled";
+
+export interface AdministrativeExpense {
+  id: string;
+  workspaceId: string;
+  name: string;
+  category: AdministrativeExpenseCategory;
+  amountCents: number;
+  currency: CurrencyCode;
+  billingCycle: BillingCycle;
+  dueDate: ISODate | null;
+  status: AdministrativeExpenseStatus;
+  notes: string | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
 export interface ProjectSubscription {
   id: string;
   workspaceId: string;
@@ -390,6 +416,7 @@ export interface AgencyData {
   resources: readonly ProjectResource[];
   commercialTerms: readonly CommercialTerms[];
   subscriptions: readonly Subscription[];
+  administrativeExpenses: readonly AdministrativeExpense[];
   projectSubscriptions: readonly ProjectSubscription[];
   activity: readonly ActivityEntry[];
   auditLog: readonly AuditLogEntry[];

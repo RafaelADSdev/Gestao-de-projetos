@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Check, Command } from "lucide-react";
+import { Check } from "lucide-react";
+import { BrandLockup } from "@/components/brand-lockup";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { PinSignIn } from "@/components/auth/pin-sign-in";
-import { APP_NAME_SUFFIX, APP_SHORT_NAME } from "@/lib/domain/constants";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function SignInPage() {
@@ -10,7 +10,7 @@ export default function SignInPage() {
   return (
     <main className="login-page">
       <section className="login-story">
-        <Link href="/" className="brand light"><span className="brand-mark"><Command size={21} /></span><span><strong>{APP_SHORT_NAME}</strong><small>{APP_NAME_SUFFIX}</small></span></Link>
+        <BrandLockup light />
         <div className="login-copy">
           <span className="eyebrow light">Operação sob controle</span>
           <h1>Menos abas abertas.<br />Mais projetos entregues.</h1>
@@ -34,7 +34,7 @@ export default function SignInPage() {
               <Link href="/" className="button button-primary button-block">Explorar demonstração <ArrowRightIcon /></Link>
             </div>
           )}
-          <small className="privacy-note">Acesso restrito aos integrantes cadastrados. O PIN é protegido pelo Supabase Auth e nunca é salvo nos campos da Central.</small>
+          <small className="privacy-note">Acesso restrito aos integrantes cadastrados. O PIN é protegido pelo Supabase Auth e nunca é salvo nos campos do painel.</small>
         </div>
       </section>
     </main>

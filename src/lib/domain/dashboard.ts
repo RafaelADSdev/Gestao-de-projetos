@@ -33,7 +33,10 @@ export function buildDashboardSnapshot(
       (deadline) => getDeadlineHealth(deadline, now, 7).dueWithinWindow,
     ).length,
     renewalsNext30Days: getUpcomingRenewals(data.subscriptions, now, 30).length,
-    financial: calculateFinancialSummary(data.commercialTerms, data.subscriptions),
+    financial: calculateFinancialSummary(
+      data.commercialTerms,
+      data.subscriptions,
+      data.administrativeExpenses,
+    ),
   };
 }
-

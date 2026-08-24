@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { encryptSecret } from "./crypto";
 import { deterministicGoogleEventId } from "./events";
 import { processCalendarSyncQueue } from "./service";
+import { GOOGLE_CALENDAR_NAME } from "./types";
 import type {
   CalendarConnection,
   CalendarSyncJob,
@@ -21,7 +22,7 @@ const connection: CalendarConnection = {
   workspaceId: "workspace-1",
   connectedBy: "user-1",
   calendarId: "calendar-1",
-  calendarName: "Central da Agência — Prazos",
+  calendarName: GOOGLE_CALENDAR_NAME,
   status: "connected",
   scopes: ["https://www.googleapis.com/auth/calendar.app.created"],
   tokenExpiresAt: "2026-08-24T14:00:00.000Z",

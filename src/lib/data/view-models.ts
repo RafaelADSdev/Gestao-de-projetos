@@ -1,4 +1,5 @@
 import type {
+  AdministrativeExpense,
   ActivityEntry,
   AgencyData,
   Client,
@@ -287,6 +288,15 @@ export function buildSubscriptions(data: AgencyData, now: Date | string): Subscr
   });
 }
 
+export type AdministrativeExpenseView = AdministrativeExpense & { monthlyCents: number };
+
+export function buildAdministrativeExpenses(data: AgencyData): AdministrativeExpenseView[] {
+  return data.administrativeExpenses.map((expense) => ({
+    ...expense,
+    monthlyCents: monthlyEquivalentCents(expense.amountCents, expense.billingCycle),
+  }));
+}
+
 export function getProjectDetail(data: AgencyData, id: string, now: Date | string) {
   const project = data.projects.find((item) => item.id === id);
   if (!project) return null;
@@ -321,5 +331,5 @@ export function getProjectDetail(data: AgencyData, id: string, now: Date | strin
 }
 
 export function buildCostsByCategory(data: AgencyData) {
-  return calculateMonthlyCostsByCategory(data.subscriptions);
+  return calculateMonthlyCostsByCategory(data.subscriptions, data.administrativeExpenses);
 }

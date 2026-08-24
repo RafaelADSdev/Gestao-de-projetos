@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   CalendarRange,
   Columns3,
@@ -8,7 +9,6 @@ import {
   Search,
   Settings2,
 } from "lucide-react";
-import { ProjectBacklog } from "@/components/projects/project-backlog";
 import { ProjectKanban } from "@/components/projects/project-kanban";
 import { requireAuthContext } from "@/lib/auth";
 import { loadAgencyData } from "@/lib/data/agency";
@@ -23,16 +23,26 @@ type BoardFilters = {
   visao?: "quadro" | "backlog";
 };
 
-function boardHref(workflowId: string, view: "quadro" | "backlog", sprintId?: string | null) {
-  const params = new URLSearchParams({ fluxo: workflowId, visao: view });
+function boardHref(workflowId: string, sprintId?: string | null) {
+  const params = new URLSearchParams({ fluxo: workflowId });
   if (sprintId) params.set("sprint", sprintId);
   return `/quadro?${params.toString()}`;
 }
 
 export default async function BoardPage({ searchParams }: { searchParams: Promise<BoardFilters> }) {
   const context = await requireAuthContext();
-  const { data, now } = await loadAgencyData(context);
   const filters = await searchParams;
+
+  if (filters.visao === "backlog") {
+    const params = new URLSearchParams();
+    if (filters.fluxo) params.set("fluxo", filters.fluxo);
+    if (filters.q) params.set("q", filters.q);
+    if (filters.responsavel) params.set("responsavel", filters.responsavel);
+    if (filters.situacao) params.set("situacao", filters.situacao);
+    redirect(`/backlog?${params.toString()}`);
+  }
+
+  const { data, now } = await loadAgencyData(context);
   const workflows = data.workflows.filter((workflow) => !workflow.archivedAt);
   const workflow = workflows.find((item) => item.id === filters.fluxo)
     ?? workflows.find((item) => item.isDefault)
@@ -56,15 +66,13 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const selectedSprint = filters.sprint === "todos"
     ? null
     : workflowSprints.find((sprint) => sprint.id === filters.sprint) ?? activeSprint;
-  const view = filters.visao === "backlog" && workflow.sprintEnabled ? "backlog" : "quadro";
   const query = filters.q?.trim().toLocaleLowerCase("pt-BR") ?? "";
   const workflowCards = buildProjectCards(data, now).filter((project) => project.workflowId === workflow.id);
   const backlogCards = workflowCards.filter((project) => project.sprintId === null);
   const plannedCards = workflow.sprintEnabled
     ? workflowCards.filter((project) => filters.sprint === "todos" ? project.sprintId !== null : selectedSprint ? project.sprintId === selectedSprint.id : project.sprintId !== null)
     : workflowCards;
-  const baseCards = view === "backlog" ? backlogCards : plannedCards;
-  const cards = baseCards.filter((project) => {
+  const cards = plannedCards.filter((project) => {
     const source = data.projects.find((item) => item.id === project.id);
     const searchable = `${project.name} ${project.clientName} ${project.technologies.map((item) => item.name).join(" ")}`.toLocaleLowerCase("pt-BR");
     const matchesText = !query || searchable.includes(query);
@@ -97,7 +105,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         <div className="workflow-switcher-title"><Columns3 size={17} /><span>Fluxos</span></div>
         <nav>
           {workflows.map((item) => (
-            <Link className={item.id === workflow.id ? "active" : ""} aria-current={item.id === workflow.id ? "page" : undefined} href={boardHref(item.id, "quadro")} key={item.id}>
+            <Link className={item.id === workflow.id ? "active" : ""} aria-current={item.id === workflow.id ? "page" : undefined} href={boardHref(item.id)} key={item.id}>
               {item.name}
               {item.sprintEnabled && <CalendarRange size={13} />}
             </Link>
@@ -108,22 +116,21 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
       <section className="board-context-bar">
         <div>
           <span className="eyebrow">{workflow.name}</span>
-          <h2>{view === "backlog" ? "Backlog do fluxo" : selectedSprint?.name ?? "Quadro contínuo"}</h2>
-          <p>{view === "backlog" ? "Organize o que ainda não entrou em uma sprint." : selectedSprint?.goal ?? workflow.description ?? "Visualize e mova os projetos entre as etapas."}</p>
+          <h2>{selectedSprint?.name ?? "Quadro contínuo"}</h2>
+          <p>{selectedSprint?.goal ?? workflow.description ?? "Visualize e mova os projetos entre as etapas."}</p>
         </div>
         {workflow.sprintEnabled && (
           <nav className="board-view-tabs" aria-label="Planejamento do fluxo">
-            <Link className={view === "quadro" ? "active" : ""} href={boardHref(workflow.id, "quadro", selectedSprint?.id)}><Columns3 size={14} /> Quadro</Link>
-            <Link className={view === "backlog" ? "active" : ""} href={boardHref(workflow.id, "backlog")}><Inbox size={14} /> Backlog <span>{backlogCards.length}</span></Link>
+            <Link className="active" href={boardHref(workflow.id, selectedSprint?.id)}><Columns3 size={14} /> Quadro</Link>
+            <Link href={`/backlog?fluxo=${workflow.id}`}><Inbox size={14} /> Backlog <span>{backlogCards.length}</span></Link>
           </nav>
         )}
       </section>
 
       <form className="toolbar board-toolbar" action="/quadro">
         <input type="hidden" name="fluxo" value={workflow.id} />
-        <input type="hidden" name="visao" value={view} />
         <label className="toolbar-search"><Search size={16} /><span className="sr-only">Buscar no quadro</span><input name="q" defaultValue={filters.q ?? ""} placeholder="Buscar projeto, cliente ou tecnologia…" /></label>
-        {workflow.sprintEnabled && view === "quadro" && (
+        {workflow.sprintEnabled && (
           <label className="toolbar-control"><span>Sprint</span><select className="toolbar-button filter-select" name="sprint" defaultValue={filters.sprint ?? selectedSprint?.id ?? "todos"}>
             <option value="todos">Todos os planejados</option>
             {workflowSprints.map((sprint) => <option value={sprint.id} key={sprint.id}>{sprint.name}{sprint.status === "active" ? " · ativa" : sprint.status === "completed" ? " · concluída" : ""}</option>)}
@@ -136,18 +143,14 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         <button className="button button-secondary" type="submit"><ListFilter size={15} /> Aplicar</button>
       </form>
 
-      {view === "backlog" ? (
-        <ProjectBacklog projects={cards} sprints={workflowSprints} />
-      ) : (
-        <section className="content-section full-board configurable-board">
-          <div className="section-heading"><div><span className="eyebrow">{workflow.sprintEnabled ? "Sprint em foco" : "Fluxo contínuo"}</span><h2>{cards.length} {cards.length === 1 ? "projeto" : "projetos"}</h2></div><div className="section-actions"><span>Arraste os cartões ou use o seletor de etapa</span></div></div>
-          <ProjectKanban
-            key={`${workflow.id}:${filters.sprint ?? selectedSprint?.id ?? "all"}:${filters.q ?? ""}:${filters.responsavel ?? ""}:${filters.situacao ?? ""}`}
-            stages={stages}
-            initialProjects={cards}
-          />
-        </section>
-      )}
+      <section className="content-section full-board configurable-board">
+        <div className="section-heading"><div><span className="eyebrow">{workflow.sprintEnabled ? "Sprint em foco" : "Fluxo contínuo"}</span><h2>{cards.length} {cards.length === 1 ? "projeto" : "projetos"}</h2></div><div className="section-actions"><span>Arraste os cartões ou use o seletor de etapa</span></div></div>
+        <ProjectKanban
+          key={`${workflow.id}:${filters.sprint ?? selectedSprint?.id ?? "all"}:${filters.q ?? ""}:${filters.responsavel ?? ""}:${filters.situacao ?? ""}`}
+          stages={stages}
+          initialProjects={cards}
+        />
+      </section>
     </>
   );
 }

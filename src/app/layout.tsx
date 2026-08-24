@@ -1,9 +1,20 @@
 import type { Metadata } from "next";
-import { Manrope } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 import { APP_NAME, APP_TAGLINE } from "@/lib/domain/constants";
 import "./globals.css";
 
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
@@ -29,8 +40,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR">
-      <body className={manrope.variable}>{children}</body>
+    <html lang="pt-BR" className={`${manrope.variable} ${inter.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

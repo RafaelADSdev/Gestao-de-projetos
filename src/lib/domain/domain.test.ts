@@ -6,6 +6,7 @@ import {
   buildDashboardSnapshot,
   calculateFinancialSummary,
   calculateMonthlyRecurringCosts,
+  calculateMonthlyAdministrativeExpenses,
   differenceInCalendarDays,
   filterProjects,
   formatCurrencyBRL,
@@ -27,7 +28,7 @@ import {
   sortProjectsByAttention,
   toISODate,
 } from "./index";
-import type { Deadline, Subscription } from "./types";
+import type { AdministrativeExpense, Deadline, Subscription } from "./types";
 
 const project = (id: string) => {
   const found = DEMO_AGENCY_DATA.projects.find((item) => item.id === id);
@@ -147,6 +148,42 @@ describe("financeiro recorrente", () => {
     expect(calculateMonthlyRecurringCosts([clientPaid], { payer: "all" })).toBe(5_999);
   });
 
+  it("normaliza despesas administrativas e ignora as pausadas", () => {
+    const expenses: AdministrativeExpense[] = [
+      {
+        id: "expense-accounting",
+        workspaceId: "workspace",
+        name: "Contabilidade",
+        category: "taxes",
+        amountCents: 36_000,
+        currency: "BRL",
+        billingCycle: "annual",
+        dueDate: null,
+        status: "active",
+        notes: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "expense-paused",
+        workspaceId: "workspace",
+        name: "Ferramenta pausada",
+        category: "software",
+        amountCents: 12_000,
+        currency: "BRL",
+        billingCycle: "monthly",
+        dueDate: null,
+        status: "paused",
+        notes: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+
+    expect(calculateMonthlyAdministrativeExpenses(expenses)).toBe(3_000);
+    expect(calculateFinancialSummary([], [], expenses).monthlyRecurringCostCents).toBe(3_000);
+  });
+
   it("recusa dinheiro negativo ou com fração de centavo", () => {
     expect(() => monthlyEquivalentCents(-1, "monthly")).toThrow(RangeError);
     expect(() => monthlyEquivalentCents(10.5, "monthly")).toThrow(RangeError);
@@ -247,4 +284,3 @@ describe("templates e snapshot do dashboard", () => {
     expect(JSON.parse(JSON.stringify(DEMO_AGENCY_DATA))).toEqual(DEMO_AGENCY_DATA);
   });
 });
-

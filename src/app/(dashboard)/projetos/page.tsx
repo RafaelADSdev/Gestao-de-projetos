@@ -63,7 +63,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
         <div><strong>{allCards.length}</strong><span>ativos</span></div>
         <div><strong>{late}</strong><span>atrasados</span></div>
         <div><strong>{blocked}</strong><span>bloqueados</span></div>
-        <div><strong>{backlog}</strong><span>no backlog</span></div>
+        <div><Link href="/backlog"><strong>{backlog}</strong></Link><span>no backlog</span></div>
       </section>
 
       <form className="toolbar portfolio-toolbar" action="/projetos">
