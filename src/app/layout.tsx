@@ -24,8 +24,8 @@ export const metadata: Metadata = {
   description: APP_TAGLINE,
   robots: { index: false, follow: false },
   icons: {
-    icon: "/tekton-logo.png",
-    apple: "/tekton-logo.png",
+    icon: "/tekton-logo-mark.svg",
+    apple: "/tekton-logo-mark.png",
   },
   openGraph: {
     type: "website",
