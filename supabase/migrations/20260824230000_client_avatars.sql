@@ -19,6 +19,7 @@ set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+drop policy if exists client_avatars_select_member on storage.objects;
 create policy client_avatars_select_member on storage.objects
   for select to authenticated
   using (
@@ -26,6 +27,7 @@ create policy client_avatars_select_member on storage.objects
     and (select private.is_workspace_member(((storage.foldername(name))[1])::uuid))
   );
 
+drop policy if exists client_avatars_insert_member on storage.objects;
 create policy client_avatars_insert_member on storage.objects
   for insert to authenticated
   with check (
@@ -33,6 +35,7 @@ create policy client_avatars_insert_member on storage.objects
     and (select private.is_workspace_member(((storage.foldername(name))[1])::uuid))
   );
 
+drop policy if exists client_avatars_update_member on storage.objects;
 create policy client_avatars_update_member on storage.objects
   for update to authenticated
   using (
@@ -44,6 +47,7 @@ create policy client_avatars_update_member on storage.objects
     and (select private.is_workspace_member(((storage.foldername(name))[1])::uuid))
   );
 
+drop policy if exists client_avatars_delete_member on storage.objects;
 create policy client_avatars_delete_member on storage.objects
   for delete to authenticated
   using (

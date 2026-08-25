@@ -8,8 +8,6 @@ import {
   TrendingUp,
   UsersRound,
 } from "lucide-react";
-import { WorkItemKanban } from "@/components/projects/work-item-kanban";
-import type { BoardStageData, WorkItemCardData } from "@/components/projects/types";
 
 export type DashboardMetric = {
   label: string;
@@ -42,8 +40,6 @@ export function DashboardView({
   name,
   dateLabel,
   metrics,
-  stages,
-  cards,
   agenda,
   finance,
   activity,
@@ -52,8 +48,6 @@ export function DashboardView({
   name: string;
   dateLabel: string;
   metrics: DashboardMetric[];
-  stages: BoardStageData[];
-  cards: WorkItemCardData[];
   agenda: AgendaItemView[];
   finance: FinanceSummaryView;
   activity: ActivityView[];
@@ -74,14 +68,6 @@ export function DashboardView({
             <ArrowRight className="metric-arrow" size={17} />
           </Link>
         ))}
-      </section>
-
-      <section className="content-section board-section">
-        <div className="section-heading">
-          <div><span className="eyebrow">Fluxo de trabalho</span><h2>Cards em execução</h2></div>
-          <div className="section-actions"><span>{cards.length} no fluxo principal</span><Link href="/quadro">Abrir Kanban <ArrowRight size={15} /></Link></div>
-        </div>
-        <WorkItemKanban stages={stages} initialCards={cards} />
       </section>
 
       <section className="dashboard-lower-grid">
