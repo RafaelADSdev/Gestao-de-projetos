@@ -161,6 +161,7 @@ export function WorkItemDetailModal({
     <dialog
       ref={dialogRef}
       className="work-item-modal work-item-detail-modal"
+      aria-label="Detalhes do card"
       onClose={onClose}
       onClick={(event) => {
         if (event.target === dialogRef.current) onClose();
@@ -205,15 +206,17 @@ export function WorkItemDetailModal({
 
             <div className="work-item-detail-section work-item-detail-activity">
               <h3>Atividade</h3>
-              <p className="muted-copy">
+              <p className="work-item-detail-activity-copy muted-copy">
                 Comentários e histórico detalhado chegam em breve. Por enquanto, alterações de etapa e sprint são registradas no Epic.
               </p>
             </div>
           </section>
 
           <aside className="work-item-detail-sidebar">
-            <div className="work-item-detail-status">
-              <label htmlFor="work-item-detail-stage">Status</label>
+            <div className="work-item-detail-sidebar-heading">Detalhes</div>
+
+            <div className="work-item-detail-property work-item-detail-status">
+              <label className="work-item-detail-label" htmlFor="work-item-detail-stage">Status</label>
               <div className="work-item-detail-status-field">
                 <span className="stage-dot" style={{ background: card.stageColor }} aria-hidden />
                 <select
@@ -230,32 +233,34 @@ export function WorkItemDetailModal({
               </div>
             </div>
 
-            <div className="work-item-detail-field">
+            <div className="work-item-detail-property">
               <span className="work-item-detail-label"><UserRound size={14} /> Responsáveis</span>
               <div className="work-item-detail-assignees">
-                {members.map((member) => {
-                  const checked = assigneeIds.includes(member.id);
-                  const avatar = card.assignees.find((item) => item.id === member.id);
-                  return (
-                    <label key={member.id} className={`work-item-detail-assignee ${checked ? "active" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleAssignee(member.id)}
-                      />
-                      <ProfileAvatar
-                        name={member.name}
-                        src={avatar?.avatarUrl ?? member.avatarUrl ?? null}
-                        size={24}
-                      />
-                      <span>{member.name}</span>
-                    </label>
-                  );
-                })}
+                {members.length > 0 ? members.map((member) => {
+                    const checked = assigneeIds.includes(member.id);
+                    const avatar = card.assignees.find((item) => item.id === member.id);
+                    return (
+                      <label key={member.id} className={`work-item-detail-assignee ${checked ? "active" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAssignee(member.id)}
+                        />
+                        <ProfileAvatar
+                          name={member.name}
+                          src={avatar?.avatarUrl ?? member.avatarUrl ?? null}
+                          size={24}
+                        />
+                        <span>{member.name}</span>
+                      </label>
+                    );
+                  }) : (
+                    <span className="work-item-detail-empty">Nenhum responsável disponível</span>
+                  )}
               </div>
             </div>
 
-            <div className="work-item-detail-field">
+            <div className="work-item-detail-property">
               <span className="work-item-detail-label"><Layers2 size={14} /> Epic</span>
               <Link href={`/projetos/${card.projectId}`} className="work-item-detail-link-row">
                 <span>{card.epicName}</span>
@@ -263,12 +268,12 @@ export function WorkItemDetailModal({
               </Link>
             </div>
 
-            <div className="work-item-detail-field">
+            <div className="work-item-detail-property">
               <span className="work-item-detail-label"><Building2 size={14} /> Cliente</span>
-              <span>{card.clientName}</span>
+              <span className="work-item-detail-value">{card.clientName}</span>
             </div>
 
-            <div className="work-item-detail-field">
+            <div className="work-item-detail-property">
               <span className="work-item-detail-label"><CalendarRange size={14} /> Sprint</span>
               <select
                 className="work-item-detail-select"
