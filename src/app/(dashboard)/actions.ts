@@ -1757,7 +1757,7 @@ export async function createWorkItemAction(formData: FormData): Promise<ActionRe
   const supabase = await createServerSupabaseClient();
   const { data: project } = await supabase
     .from("projects")
-    .select("id, workflow_id, archived_at")
+    .select("id, workflow_id, board_column_id, archived_at")
     .eq("workspace_id", context.workspaceId)
     .eq("id", projectId)
     .maybeSingle();
@@ -1769,10 +1769,10 @@ export async function createWorkItemAction(formData: FormData): Promise<ActionRe
     .eq("workspace_id", context.workspaceId)
     .eq("workflow_id", project.workflow_id)
     .is("archived_at", null)
-    .order("position", { ascending: true })
-    .limit(1);
+    .order("position", { ascending: true });
   const firstColumn = columns?.[0];
-  if (!firstColumn) return { ok: false, error: "O fluxo do Epic não possui etapas configuradas." };
+  const boardColumnId = project.board_column_id ?? firstColumn?.id;
+  if (!boardColumnId) return { ok: false, error: "O fluxo do Epic não possui etapas configuradas." };
 
   if (sprintId) {
     const { data: sprint } = await supabase
@@ -1792,7 +1792,7 @@ export async function createWorkItemAction(formData: FormData): Promise<ActionRe
       workspace_id: context.workspaceId,
       project_id: projectId,
       workflow_id: project.workflow_id,
-      board_column_id: firstColumn.id,
+      board_column_id: boardColumnId,
       sprint_id: sprintId,
       title,
       description,

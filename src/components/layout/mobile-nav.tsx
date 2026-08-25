@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Columns3, FolderKanban, Inbox, LayoutDashboard, Menu, Plus } from "lucide-react";
+import { Columns3, FolderKanban, LayoutDashboard, Menu, Plus } from "lucide-react";
 
 const items = [
   { href: "/", label: "Início", icon: LayoutDashboard },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
   { href: "/projetos/novo", label: "Novo", icon: Plus, primary: true },
-  { href: "/backlog", label: "Backlog", icon: Inbox },
+  { href: "/quadro", label: "Kanban", icon: Columns3 },
   { href: "/configuracoes", label: "Mais", icon: Menu },
 ];
 

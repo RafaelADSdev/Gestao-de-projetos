@@ -7,9 +7,8 @@ import {
   Droppable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { Inbox, Layers3, Plus } from "lucide-react";
+import { Inbox, Layers3 } from "lucide-react";
 import { assignWorkItemSprintAction } from "@/app/(dashboard)/actions";
-import { CreateWorkItemModal } from "@/components/projects/create-work-item-modal";
 import { WorkItemCard } from "@/components/projects/work-item-card";
 import type { WorkItemCardData } from "./types";
 
@@ -18,9 +17,6 @@ type SprintColumn = {
   name: string;
   status: "planned" | "active" | "completed";
 };
-
-type EpicOption = { id: string; name: string; clientName: string };
-type MemberOption = { id: string; name: string };
 
 const sprintStatus = {
   planned: "Planejada",
@@ -33,17 +29,14 @@ const BACKLOG_COLUMN_ID = "backlog";
 export function WorkItemBacklogBoard({
   initialCards,
   sprints,
-  epics,
-  members,
 }: {
   initialCards: WorkItemCardData[];
   sprints: readonly SprintColumn[];
-  epics: EpicOption[];
-  members: MemberOption[];
+  epics?: { id: string; name: string; clientName: string }[];
+  members?: { id: string; name: string }[];
 }) {
   const [cards, setCards] = useState(initialCards);
   const [moveError, setMoveError] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const openSprints = useMemo(
@@ -98,13 +91,6 @@ export function WorkItemBacklogBoard({
 
   return (
     <>
-      <div className="backlog-board-toolbar">
-        <p>Arraste os cards entre o backlog e as sprints — como no Jira.</p>
-        <button type="button" className="button button-primary" onClick={() => setModalOpen(true)}>
-          <Plus size={16} /> Novo card
-        </button>
-      </div>
-
       {moveError && <p className="kanban-error" role="alert">{moveError}</p>}
 
       <DragDropContext onDragEnd={onDragEnd}>
@@ -151,14 +137,6 @@ export function WorkItemBacklogBoard({
           })}
         </div>
       </DragDropContext>
-
-      <CreateWorkItemModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        epics={epics}
-        members={members}
-        sprints={openSprints.map((sprint) => ({ id: sprint.id, name: sprint.name }))}
-      />
     </>
   );
 }

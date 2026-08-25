@@ -34,7 +34,7 @@ export function EpicChildCards({ cards }: { cards: WorkItemCardData[] }) {
         ))}
         {!cards.length && <p className="muted-copy">Nenhum card criado ainda. Use o backlog para adicionar tarefas a este Epic.</p>}
       </div>
-      <Link href="/backlog" className="quiet-link epic-child-link">Ver backlog <ArrowRight size={13} /></Link>
+      <Link href="/quadro?visao=backlog" className="quiet-link epic-child-link">Ver backlog <ArrowRight size={13} /></Link>
     </article>
   );
 }

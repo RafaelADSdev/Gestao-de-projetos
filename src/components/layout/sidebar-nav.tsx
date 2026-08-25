@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Columns3,
   FolderKanban,
-  Inbox,
   LayoutDashboard,
   Settings,
   Users,
@@ -17,7 +16,6 @@ const items = [
   { href: "/", label: "Visão geral", icon: LayoutDashboard },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
   { href: "/quadro", label: "Kanban", icon: Columns3 },
-  { href: "/backlog", label: "Backlog", icon: Inbox },
   { href: "/calendario", label: "Calendário", icon: CalendarDays },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/financeiro", label: "Financeiro", icon: WalletCards, finance: true },
@@ -25,6 +23,7 @@ const items = [
 ];
 
 function isActive(pathname: string, href: string) {
+  if (href === "/quadro") return pathname === "/quadro" || pathname.startsWith("/backlog");
   return href === "/" ? pathname === href : pathname.startsWith(href);
 }
 

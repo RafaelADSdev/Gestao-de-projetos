@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { createWorkItemAction } from "@/app/(dashboard)/actions";
 
@@ -24,6 +25,7 @@ export function CreateWorkItemModal({
   defaultSprintId?: string | null;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -42,6 +44,7 @@ export function CreateWorkItemModal({
         setError(result.error);
         return;
       }
+      router.refresh();
       onClose();
     });
   }
