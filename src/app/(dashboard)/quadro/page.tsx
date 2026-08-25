@@ -93,7 +93,9 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
       const client = data.clients.find((item) => item.id === project.clientId);
       return { id: project.id, name: project.name, clientName: client?.name ?? "Cliente não informado" };
     });
-  const members = data.members.filter((member) => member.active).map((member) => ({ id: member.id, name: member.name }));
+  const members = data.members
+    .filter((member) => member.active)
+    .map((member) => ({ id: member.id, name: member.name, avatarUrl: member.avatarUrl }));
   const sprintOptions = openSprints.map((sprint) => ({ id: sprint.id, name: sprint.name }));
   const defaultSprintId = isBacklogView ? null : (selectedSprint?.id ?? null);
   const canAdminister = context.role === "owner" || context.role === "admin";
@@ -224,14 +226,17 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
                 key={`backlog:${workflow.id}:${filters.q ?? ""}:${filters.responsavel ?? ""}`}
                 initialCards={filteredCards}
                 sprints={workflowSprints}
-                epics={epics}
+                stages={stages}
                 members={members}
+                epics={epics}
               />
             ) : (
               <WorkItemKanban
                 key={`kanban:${workflow.id}:${sprintFilter}:${filters.q ?? ""}:${filters.responsavel ?? ""}`}
                 stages={stages}
                 initialCards={kanbanCards}
+                members={members}
+                sprints={sprintOptions}
               />
             )}
           </section>

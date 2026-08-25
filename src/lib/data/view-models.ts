@@ -120,6 +120,8 @@ export type WorkItemCardFilters = {
   sprintId?: string | null;
   projectId?: string;
   assigneeId?: string;
+  /** When true, includes legacy Epic mirrors (hidden from Kanban by default). */
+  includeEpicMirrors?: boolean;
 };
 
 export function buildWorkItemCards(
@@ -128,6 +130,7 @@ export function buildWorkItemCards(
 ): WorkItemCardData[] {
   return data.workItems
     .filter((item) => item.archivedAt === null)
+    .filter((item) => filters.includeEpicMirrors || item.source === "manual")
     .filter((item) => !filters.workflowId || item.workflowId === filters.workflowId)
     .filter((item) => filters.sprintId === undefined || item.sprintId === filters.sprintId)
     .filter((item) => !filters.projectId || item.projectId === filters.projectId)
@@ -154,9 +157,12 @@ export function buildWorkItemCards(
         workflowId: item.workflowId,
         stageId: item.stageId,
         stageName: stage?.label ?? item.stageId,
+        stageColor: stage?.color ?? "#8b94a6",
         sprintId: item.sprintId,
         sprintName: sprint?.name ?? null,
         assignees,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
       };
     });
 }
@@ -230,7 +236,7 @@ export function buildStageMetrics(data: AgencyData): DashboardMetric[] {
 
   const stages = buildBoardStages(data, defaultWorkflow.id);
   const cards = data.workItems.filter(
-    (item) => item.archivedAt === null && item.workflowId === defaultWorkflow.id,
+    (item) => item.archivedAt === null && item.workflowId === defaultWorkflow.id && item.source === "manual",
   );
 
   return stages.map((stage) => {

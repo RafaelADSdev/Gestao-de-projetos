@@ -10,13 +10,17 @@ import {
 import { Inbox, Layers3 } from "lucide-react";
 import { assignWorkItemSprintAction } from "@/app/(dashboard)/actions";
 import { WorkItemCard } from "@/components/projects/work-item-card";
-import type { WorkItemCardData } from "./types";
+import { WorkItemDetailModal } from "@/components/projects/work-item-detail-modal";
+import type { BoardStageData, WorkItemCardData } from "./types";
 
 type SprintColumn = {
   id: string;
   name: string;
   status: "planned" | "active" | "completed";
 };
+
+type MemberOption = { id: string; name: string; avatarUrl?: string | null };
+type SprintOption = { id: string; name: string };
 
 const sprintStatus = {
   planned: "Planejada",
@@ -29,13 +33,17 @@ const BACKLOG_COLUMN_ID = "backlog";
 export function WorkItemBacklogBoard({
   initialCards,
   sprints,
+  stages,
+  members,
 }: {
   initialCards: WorkItemCardData[];
   sprints: readonly SprintColumn[];
+  stages: BoardStageData[];
+  members: MemberOption[];
   epics?: { id: string; name: string; clientName: string }[];
-  members?: { id: string; name: string }[];
 }) {
   const [cards, setCards] = useState(initialCards);
+  const [selectedCard, setSelectedCard] = useState<WorkItemCardData | null>(null);
   const [moveError, setMoveError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -43,6 +51,7 @@ export function WorkItemBacklogBoard({
     () => sprints.filter((sprint) => sprint.status !== "completed"),
     [sprints],
   );
+  const sprintOptions = openSprints.map((sprint) => ({ id: sprint.id, name: sprint.name }));
 
   const columns = useMemo(() => {
     const grouped = new Map<string, WorkItemCardData[]>();
@@ -54,6 +63,11 @@ export function WorkItemBacklogBoard({
     });
     return grouped;
   }, [cards, openSprints]);
+
+  function patchCard(updated: WorkItemCardData) {
+    setCards((current) => current.map((card) => (card.id === updated.id ? updated : card)));
+    setSelectedCard(updated);
+  }
 
   function assignSprint(cardId: string, sprintId: string | null) {
     const previous = cards;
@@ -122,7 +136,12 @@ export function WorkItemBacklogBoard({
                               {...dragProvided.draggableProps}
                               className={`work-item-card ${dragSnapshot.isDragging ? "dragging" : ""}`}
                             >
-                              <WorkItemCard card={card} dragHandleProps={dragProvided.dragHandleProps} />
+                              <WorkItemCard
+                                card={card}
+                                dragHandleProps={dragProvided.dragHandleProps}
+                                showSprint={false}
+                                onOpen={() => setSelectedCard(card)}
+                              />
                             </article>
                           )}
                         </Draggable>
@@ -137,6 +156,16 @@ export function WorkItemBacklogBoard({
           })}
         </div>
       </DragDropContext>
+
+      <WorkItemDetailModal
+        card={selectedCard}
+        open={Boolean(selectedCard)}
+        onClose={() => setSelectedCard(null)}
+        onChange={patchCard}
+        stages={stages}
+        members={members}
+        sprints={sprintOptions}
+      />
     </>
   );
 }

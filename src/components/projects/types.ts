@@ -24,9 +24,12 @@ export type WorkItemCardData = {
   workflowId: string;
   stageId: string;
   stageName: string;
+  stageColor: string;
   sprintId: string | null;
   sprintName: string | null;
   assignees: { id: string; name: string; avatarUrl: string | null }[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ProjectCardData = {

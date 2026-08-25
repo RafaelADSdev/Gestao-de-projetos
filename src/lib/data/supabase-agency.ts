@@ -168,6 +168,7 @@ type WorkItemRow = {
   title: string;
   description: string | null;
   sort_order: number;
+  source: string;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -479,7 +480,7 @@ export async function loadSupabaseAgencyData(
     supabase
       .from("work_items")
       .select(
-        "id, workspace_id, project_id, workflow_id, board_column_id, sprint_id, title, description, sort_order, archived_at, created_at, updated_at",
+        "id, workspace_id, project_id, workflow_id, board_column_id, sprint_id, title, description, sort_order, source, archived_at, created_at, updated_at",
       )
       .eq("workspace_id", workspaceId)
       .order("sort_order", { ascending: true }),
@@ -885,6 +886,7 @@ function mapWorkItem(
     description: row.description,
     sortOrder: row.sort_order,
     assigneeIds,
+    source: row.source === "epic_mirror" ? "epic_mirror" : "manual",
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

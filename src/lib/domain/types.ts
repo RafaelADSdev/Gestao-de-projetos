@@ -198,6 +198,8 @@ export interface ChecklistItem {
   assigneeId: string | null;
 }
 
+export type WorkItemSource = "manual" | "epic_mirror";
+
 export interface WorkItem {
   id: string;
   workspaceId: string;
@@ -211,6 +213,8 @@ export interface WorkItem {
   description: string | null;
   sortOrder: number;
   assigneeIds: readonly string[];
+  /** Manual cards appear on Kanban; epic_mirror is legacy and hidden. */
+  source: WorkItemSource;
   archivedAt: ISODateTime | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;

@@ -9,16 +9,25 @@ import {
 } from "@hello-pangea/dnd";
 import { moveWorkItemAction } from "@/app/(dashboard)/actions";
 import { WorkItemCard } from "@/components/projects/work-item-card";
+import { WorkItemDetailModal } from "@/components/projects/work-item-detail-modal";
 import type { BoardStageData, WorkItemCardData } from "./types";
+
+type MemberOption = { id: string; name: string; avatarUrl?: string | null };
+type SprintOption = { id: string; name: string };
 
 export function WorkItemKanban({
   stages,
   initialCards,
+  members,
+  sprints,
 }: {
   stages: BoardStageData[];
   initialCards: WorkItemCardData[];
+  members: MemberOption[];
+  sprints: SprintOption[];
 }) {
   const [cards, setCards] = useState(initialCards);
+  const [selectedCard, setSelectedCard] = useState<WorkItemCardData | null>(null);
   const [moveError, setMoveError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -28,12 +37,17 @@ export function WorkItemKanban({
     return grouped;
   }, [cards, stages]);
 
+  function patchCard(updated: WorkItemCardData) {
+    setCards((current) => current.map((card) => (card.id === updated.id ? updated : card)));
+    setSelectedCard(updated);
+  }
+
   function move(cardId: string, stageId: string) {
     const previous = cards;
     const stage = stages.find((item) => item.id === stageId);
     setMoveError("");
     setCards((current) => current.map((card) =>
-      card.id === cardId ? { ...card, stageId, stageName: stage?.name ?? card.stageName } : card,
+      card.id === cardId ? { ...card, stageId, stageName: stage?.name ?? card.stageName, stageColor: stage?.color ?? card.stageColor } : card,
     ));
     startTransition(async () => {
       const result = await moveWorkItemAction(cardId, stageId);
@@ -72,15 +86,27 @@ export function WorkItemKanban({
                         <Draggable draggableId={card.id} index={index} key={card.id}>
                           {(dragProvided, dragSnapshot) => (
                             <article
-                              className={`project-card work-item-kanban-card ${dragSnapshot.isDragging ? "dragging" : ""}`}
+                              className={`work-item-kanban-card ${dragSnapshot.isDragging ? "dragging" : ""}`}
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                             >
-                              <WorkItemCard card={card} dragHandleProps={dragProvided.dragHandleProps} />
+                              <WorkItemCard
+                                card={card}
+                                dragHandleProps={dragProvided.dragHandleProps}
+                                onOpen={() => setSelectedCard(card)}
+                              />
                               <label className="sr-only" htmlFor={`move-card-${card.id}`}>Mover {card.title} para</label>
-                              <select id={`move-card-${card.id}`} className="stage-select" value={card.stageId} onChange={(event) => move(card.id, event.target.value)}>
-                                {stages.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                              </select>
+                              <div className="work-item-stage-field" onClick={(event) => event.stopPropagation()}>
+                                <span className="stage-dot" style={{ background: stages.find((s) => s.id === card.stageId)?.color }} aria-hidden />
+                                <select
+                                  id={`move-card-${card.id}`}
+                                  className="work-item-stage-select"
+                                  value={card.stageId}
+                                  onChange={(event) => move(card.id, event.target.value)}
+                                >
+                                  {stages.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                                </select>
+                              </div>
                             </article>
                           )}
                         </Draggable>
@@ -95,6 +121,16 @@ export function WorkItemKanban({
           })}
         </div>
       </DragDropContext>
+
+      <WorkItemDetailModal
+        card={selectedCard}
+        open={Boolean(selectedCard)}
+        onClose={() => setSelectedCard(null)}
+        onChange={patchCard}
+        stages={stages}
+        members={members}
+        sprints={sprints}
+      />
     </>
   );
 }
