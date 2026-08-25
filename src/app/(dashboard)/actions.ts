@@ -203,7 +203,10 @@ export async function moveProjectAction(projectId: string, stageId: string): Pro
     entity_id: projectId,
     metadata: { board_column_id: column.id, stage_key: column.key },
   });
+  const syncResult = await syncEpicWorkItemsFromProject(supabase, context, projectId);
+  if (!syncResult.ok) return syncResult;
   revalidateProjectViews(projectId);
+  revalidateWorkItemViews(projectId);
   return { ok: true };
 }
 
@@ -485,7 +488,11 @@ export async function createProjectAction(formData: FormData): Promise<ActionRes
 
   if (dueDate) await tryImmediateCalendarSync(context.workspaceId);
 
+  const syncResult = await syncEpicWorkItemsFromProject(supabase, context, data.id);
+  if (!syncResult.ok) return syncResult;
+
   revalidateProjectViews(data.id);
+  revalidateWorkItemViews(data.id);
   redirect(`/projetos/${data.id}`);
 }
 
@@ -1187,7 +1194,10 @@ export async function assignProjectWorkflowAction(projectId: string, formData: F
   const { error } = await supabase.from("projects").update({ workflow_id: workflowId, board_column_id: column.id, sprint_id: compatibleSprintId, updated_by: context.userId }).eq("workspace_id", context.workspaceId).eq("id", projectId);
   if (error) return { ok: false, error: "Não foi possível alterar o fluxo do projeto." };
   await supabase.from("project_activity").insert({ workspace_id: context.workspaceId, project_id: projectId, actor_id: context.userId, action: "workflow_changed", entity_type: "project", entity_id: projectId, metadata: { workflow_id: workflowId, board_column_id: column.id, sprint_cleared: Boolean(project.sprint_id && !compatibleSprintId) } });
+  const syncResult = await syncEpicWorkItemsFromProject(supabase, context, projectId);
+  if (!syncResult.ok) return syncResult;
   revalidateProjectViews(projectId);
+  revalidateWorkItemViews(projectId);
   return { ok: true, message: compatibleSprintId ? "Fluxo e etapa atualizados." : "Fluxo atualizado; sprint incompatível removida." };
 }
 
@@ -1208,7 +1218,10 @@ export async function assignProjectSprintAction(projectId: string, formData: For
   const { error } = await supabase.from("projects").update({ sprint_id: sprintId, updated_by: context.userId }).eq("workspace_id", context.workspaceId).eq("id", projectId);
   if (error) return { ok: false, error: "Não foi possível atualizar a sprint do projeto." };
   await supabase.from("project_activity").insert({ workspace_id: context.workspaceId, project_id: projectId, actor_id: context.userId, action: sprintId ? "sprint_assigned" : "moved_to_backlog", entity_type: "project", entity_id: projectId, metadata: { sprint_id: sprintId } });
+  const syncResult = await syncEpicWorkItemsFromProject(supabase, context, projectId);
+  if (!syncResult.ok) return syncResult;
   revalidateProjectViews(projectId);
+  revalidateWorkItemViews(projectId);
   return { ok: true, message: sprintId ? "Projeto incluído na sprint." : "Projeto movido para o backlog." };
 }
 
@@ -1643,6 +1656,87 @@ function workItemMigrationMessage(error: { code?: string; message?: string } | n
   return error?.code === "PGRST205" && error.message?.includes("work_items")
     ? "A tabela de cards ainda não foi criada no Supabase. Execute a migração work_items antes de continuar."
     : null;
+}
+
+type AuthSyncContext = { workspaceId: string; userId: string };
+
+/** Mantém cards de trabalho alinhados ao planejamento do Epic (sprint e etapa). */
+async function syncEpicWorkItemsFromProject(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  context: AuthSyncContext,
+  projectId: string,
+): Promise<ActionResult> {
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("id, workflow_id, board_column_id, sprint_id, name, next_action, responsible_id, archived_at")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", projectId)
+    .maybeSingle();
+  const projectMigration = workItemMigrationMessage(projectError);
+  if (projectMigration) return { ok: true };
+  if (projectError || !project || project.archived_at) return { ok: true };
+
+  const { data: items, error: itemsError } = await supabase
+    .from("work_items")
+    .select("id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("project_id", projectId)
+    .is("archived_at", null);
+  const itemsMigration = workItemMigrationMessage(itemsError);
+  if (itemsMigration) return { ok: true };
+  if (itemsError) return { ok: false, error: "Não foi possível sincronizar os cards do Epic." };
+
+  if (!items?.length) {
+    const rawTitle = (project.next_action ?? project.name ?? "Primeira tarefa").trim();
+    const title = rawTitle.length >= 2 ? rawTitle.slice(0, 200) : "Primeira tarefa";
+    const { data: created, error: insertError } = await supabase
+      .from("work_items")
+      .insert({
+        workspace_id: context.workspaceId,
+        project_id: projectId,
+        workflow_id: project.workflow_id,
+        board_column_id: project.board_column_id,
+        sprint_id: project.sprint_id,
+        title,
+        description: null,
+        created_by: context.userId,
+        updated_by: context.userId,
+      })
+      .select("id")
+      .single();
+    const insertMigration = workItemMigrationMessage(insertError);
+    if (insertMigration) return { ok: true };
+    if (insertError || !created) return { ok: false, error: "Não foi possível criar o card inicial do Epic." };
+
+    if (project.responsible_id) {
+      await supabase.from("work_item_assignees").upsert({
+        workspace_id: context.workspaceId,
+        work_item_id: created.id,
+        member_id: project.responsible_id,
+      }, { onConflict: "work_item_id,member_id", ignoreDuplicates: true });
+    }
+    return { ok: true };
+  }
+
+  const payload: Record<string, string | null> = {
+    sprint_id: project.sprint_id,
+    workflow_id: project.workflow_id,
+    updated_by: context.userId,
+  };
+  if (items.length === 1) {
+    payload.board_column_id = project.board_column_id;
+  }
+
+  const { error: updateError } = await supabase
+    .from("work_items")
+    .update(payload)
+    .eq("workspace_id", context.workspaceId)
+    .eq("project_id", projectId)
+    .is("archived_at", null);
+  const updateMigration = workItemMigrationMessage(updateError);
+  if (updateMigration) return { ok: true };
+  if (updateError) return { ok: false, error: "Não foi possível sincronizar os cards do Epic." };
+  return { ok: true };
 }
 
 export async function createWorkItemAction(formData: FormData): Promise<ActionResult> {
