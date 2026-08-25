@@ -9,15 +9,14 @@ import {
   Search,
   Settings2,
 } from "lucide-react";
-import { ProjectBacklog } from "@/components/projects/project-backlog";
+import { WorkItemBacklogBoard } from "@/components/projects/work-item-backlog-board";
 import { requireAuthContext } from "@/lib/auth";
 import { loadAgencyData } from "@/lib/data/agency";
-import { buildProjectCards } from "@/lib/data/view-models";
+import { buildWorkItemCards } from "@/lib/data/view-models";
 
 type BacklogFilters = {
   q?: string;
   responsavel?: string;
-  situacao?: string;
   fluxo?: string;
 };
 
@@ -25,29 +24,9 @@ function backlogHref(workflowId: string) {
   return `/backlog?fluxo=${workflowId}`;
 }
 
-function filterCards(
-  cards: ReturnType<typeof buildProjectCards>,
-  data: Awaited<ReturnType<typeof loadAgencyData>>["data"],
-  filters: BacklogFilters,
-) {
-  const query = filters.q?.trim().toLocaleLowerCase("pt-BR") ?? "";
-  return cards.filter((project) => {
-    const source = data.projects.find((item) => item.id === project.id);
-    const searchable = `${project.name} ${project.clientName} ${project.technologies.map((item) => item.name).join(" ")}`.toLocaleLowerCase("pt-BR");
-    const matchesText = !query || searchable.includes(query);
-    const matchesOwner = !filters.responsavel || source?.ownerId === filters.responsavel;
-    const matchesSituation = !filters.situacao
-      || (filters.situacao === "atrasado" && project.health === "late")
-      || (filters.situacao === "proximo" && project.health === "attention")
-      || (filters.situacao === "bloqueado" && project.blocked)
-      || (filters.situacao === "cliente" && project.stageName.toLocaleLowerCase("pt-BR").includes("cliente"));
-    return matchesText && matchesOwner && matchesSituation;
-  });
-}
-
 export default async function BacklogPage({ searchParams }: { searchParams: Promise<BacklogFilters> }) {
   const context = await requireAuthContext();
-  const { data, now } = await loadAgencyData(context);
+  const { data } = await loadAgencyData(context);
   const filters = await searchParams;
   const workflows = data.workflows.filter((workflow) => !workflow.archivedAt);
   const sprintWorkflows = workflows.filter((workflow) => workflow.sprintEnabled);
@@ -80,15 +59,25 @@ export default async function BacklogPage({ searchParams }: { searchParams: Prom
   const workflowSprints = data.sprints
     .filter((sprint) => sprint.workflowId === workflow.id)
     .sort((left, right) => (right.startDate ?? "").localeCompare(left.startDate ?? ""));
-  const workflowCards = buildProjectCards(data, now, { workflowId: workflow.id });
-  const backlogCards = workflow.sprintEnabled
-    ? workflowCards.filter((project) => project.sprintId === null)
-    : [];
-  const cards = filterCards(backlogCards, data, filters);
+  const query = filters.q?.trim().toLocaleLowerCase("pt-BR") ?? "";
+  const workflowCards = buildWorkItemCards(data, { workflowId: workflow.id });
+  const cards = workflowCards.filter((card) => {
+    const searchable = `${card.title} ${card.epicName} ${card.clientName} ${card.description ?? ""}`.toLocaleLowerCase("pt-BR");
+    const matchesText = !query || searchable.includes(query);
+    const matchesAssignee = !filters.responsavel || card.assignees.some((assignee) => assignee.id === filters.responsavel);
+    return matchesText && matchesAssignee;
+  });
+  const backlogCount = workflowCards.filter((card) => card.sprintId === null).length;
   const totalBacklog = sprintWorkflows.reduce((count, item) => {
-    const items = buildProjectCards(data, now, { workflowId: item.id }).filter((project) => project.sprintId === null);
-    return count + items.length;
+    return count + buildWorkItemCards(data, { workflowId: item.id }).filter((card) => card.sprintId === null).length;
   }, 0);
+  const epics = data.projects
+    .filter((project) => project.workflowId === workflow.id && project.archivedAt === null)
+    .map((project) => {
+      const client = data.clients.find((item) => item.id === project.clientId);
+      return { id: project.id, name: project.name, clientName: client?.name ?? "Cliente não informado" };
+    });
+  const members = data.members.filter((member) => member.active).map((member) => ({ id: member.id, name: member.name }));
   const canAdminister = context.role === "owner" || context.role === "admin";
 
   return (
@@ -97,20 +86,20 @@ export default async function BacklogPage({ searchParams }: { searchParams: Prom
         <div>
           <span className="eyebrow">Planejamento do trabalho</span>
           <h1>Backlog</h1>
-          <p>Priorize o que ainda não entrou em uma sprint e distribua o trabalho da equipe.</p>
+          <p>Organize cards por sprint. Cada projeto é um Epic; os cards são as tarefas executáveis.</p>
         </div>
         <div className="heading-button-group">
           <Link href={`/quadro?fluxo=${workflow.id}`} className="button button-secondary"><Columns3 size={16} /> Abrir Kanban</Link>
           {canAdminister && <Link href="/configuracoes/fluxos" className="button button-secondary"><Settings2 size={16} /> Configurar</Link>}
-          <Link href="/projetos/novo" className="button button-primary"><Plus size={17} /> Novo projeto</Link>
+          <Link href="/projetos/novo" className="button button-secondary"><Plus size={17} /> Novo Epic</Link>
         </div>
       </header>
 
       <section className="compact-stats project-stats" aria-label="Resumo do backlog">
-        <div><strong>{totalBacklog}</strong><span>aguardando sprint</span></div>
+        <div><strong>{totalBacklog}</strong><span>cards no backlog</span></div>
         <div><strong>{cards.length}</strong><span>neste fluxo</span></div>
         <div><strong>{workflowSprints.filter((sprint) => sprint.status !== "completed").length}</strong><span>sprints abertas</span></div>
-        <div><strong>{sprintWorkflows.length}</strong><span>fluxos com sprint</span></div>
+        <div><strong>{epics.length}</strong><span>epics ativos</span></div>
       </section>
 
       <section className="workflow-switcher panel" aria-label="Fluxos de trabalho">
@@ -133,17 +122,17 @@ export default async function BacklogPage({ searchParams }: { searchParams: Prom
       <section className="board-context-bar">
         <div>
           <span className="eyebrow">{workflow.name}</span>
-          <h2>{workflow.sprintEnabled ? "Itens fora da sprint" : "Fluxo contínuo"}</h2>
+          <h2>{workflow.sprintEnabled ? "Planejamento por sprint" : "Fluxo contínuo"}</h2>
           <p>
             {workflow.sprintEnabled
-              ? "Projetos sem sprint definida ficam aqui até serem planejados."
+              ? "Arraste cards do backlog para uma sprint ou crie novos cards vinculados a um Epic."
               : "Este fluxo não usa backlog. Ative sprints nas configurações para separar planejamento e execução."}
           </p>
         </div>
         {workflow.sprintEnabled && (
           <nav className="board-view-tabs" aria-label="Alternar planejamento">
             <Link href={`/quadro?fluxo=${workflow.id}`}><Columns3 size={14} /> Quadro</Link>
-            <Link className="active" href={backlogHref(workflow.id)}><Inbox size={14} /> Backlog <span>{backlogCards.length}</span></Link>
+            <Link className="active" href={backlogHref(workflow.id)}><Inbox size={14} /> Backlog <span>{backlogCount}</span></Link>
           </nav>
         )}
       </section>
@@ -172,27 +161,25 @@ export default async function BacklogPage({ searchParams }: { searchParams: Prom
             <label className="toolbar-search">
               <Search size={16} />
               <span className="sr-only">Buscar no backlog</span>
-              <input name="q" defaultValue={filters.q ?? ""} placeholder="Buscar projeto, cliente ou tecnologia…" />
+              <input name="q" defaultValue={filters.q ?? ""} placeholder="Buscar card, Epic ou cliente…" />
             </label>
             <label className="sr-only" htmlFor="backlog-owner">Responsável</label>
             <select className="toolbar-button filter-select" id="backlog-owner" name="responsavel" defaultValue={filters.responsavel ?? ""}>
               <option value="">Todos os responsáveis</option>
-              {data.members.filter((member) => member.active).map((member) => (
+              {members.map((member) => (
                 <option value={member.id} key={member.id}>{member.name}</option>
               ))}
-            </select>
-            <label className="sr-only" htmlFor="backlog-state">Situação</label>
-            <select className="toolbar-button filter-select" id="backlog-state" name="situacao" defaultValue={filters.situacao ?? ""}>
-              <option value="">Todas as situações</option>
-              <option value="atrasado">Atrasados</option>
-              <option value="proximo">Prazo próximo</option>
-              <option value="bloqueado">Bloqueados</option>
-              <option value="cliente">Aguardando cliente</option>
             </select>
             <button className="button button-secondary" type="submit"><ListFilter size={15} /> Aplicar</button>
           </form>
 
-          <ProjectBacklog projects={cards} sprints={workflowSprints} />
+          <WorkItemBacklogBoard
+            key={`${workflow.id}:${filters.q ?? ""}:${filters.responsavel ?? ""}`}
+            initialCards={cards}
+            sprints={workflowSprints}
+            epics={epics}
+            members={members}
+          />
         </>
       )}
     </>

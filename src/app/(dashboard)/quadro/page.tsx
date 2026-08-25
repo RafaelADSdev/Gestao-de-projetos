@@ -9,10 +9,10 @@ import {
   Search,
   Settings2,
 } from "lucide-react";
-import { ProjectKanban } from "@/components/projects/project-kanban";
+import { WorkItemKanban } from "@/components/projects/work-item-kanban";
 import { requireAuthContext } from "@/lib/auth";
 import { loadAgencyData } from "@/lib/data/agency";
-import { buildBoardStages, buildProjectCards } from "@/lib/data/view-models";
+import { buildBoardStages, buildWorkItemCards } from "@/lib/data/view-models";
 
 type BoardFilters = {
   q?: string;
@@ -67,22 +67,16 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     ? null
     : workflowSprints.find((sprint) => sprint.id === filters.sprint) ?? activeSprint;
   const query = filters.q?.trim().toLocaleLowerCase("pt-BR") ?? "";
-  const workflowCards = buildProjectCards(data, now).filter((project) => project.workflowId === workflow.id);
-  const backlogCards = workflowCards.filter((project) => project.sprintId === null);
+  const workflowCards = buildWorkItemCards(data, { workflowId: workflow.id });
+  const backlogCards = workflowCards.filter((card) => card.sprintId === null);
   const plannedCards = workflow.sprintEnabled
-    ? workflowCards.filter((project) => filters.sprint === "todos" ? project.sprintId !== null : selectedSprint ? project.sprintId === selectedSprint.id : project.sprintId !== null)
+    ? workflowCards.filter((card) => filters.sprint === "todos" ? card.sprintId !== null : selectedSprint ? card.sprintId === selectedSprint.id : card.sprintId !== null)
     : workflowCards;
-  const cards = plannedCards.filter((project) => {
-    const source = data.projects.find((item) => item.id === project.id);
-    const searchable = `${project.name} ${project.clientName} ${project.technologies.map((item) => item.name).join(" ")}`.toLocaleLowerCase("pt-BR");
+  const cards = plannedCards.filter((card) => {
+    const searchable = `${card.title} ${card.epicName} ${card.clientName} ${card.description ?? ""}`.toLocaleLowerCase("pt-BR");
     const matchesText = !query || searchable.includes(query);
-    const matchesOwner = !filters.responsavel || source?.ownerId === filters.responsavel;
-    const matchesSituation = !filters.situacao
-      || (filters.situacao === "atrasado" && project.health === "late")
-      || (filters.situacao === "proximo" && project.health === "attention")
-      || (filters.situacao === "bloqueado" && project.blocked)
-      || (filters.situacao === "cliente" && project.stageName.toLocaleLowerCase("pt-BR").includes("cliente"));
-    return matchesText && matchesOwner && matchesSituation;
+    const matchesAssignee = !filters.responsavel || card.assignees.some((assignee) => assignee.id === filters.responsavel);
+    return matchesText && matchesAssignee;
   });
   const stages = buildBoardStages(data, workflow.id);
   const canAdminister = context.role === "owner" || context.role === "admin";
@@ -93,11 +87,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         <div>
           <span className="eyebrow">Execução do trabalho</span>
           <h1>Kanban</h1>
-          <p>Concentre a equipe em um fluxo, uma sprint e o trabalho de cada responsável.</p>
+          <p>Execute os cards da sprint por etapa. Cada card pertence a um Epic (projeto).</p>
         </div>
         <div className="heading-button-group">
           {canAdminister && <Link href="/configuracoes/fluxos" className="button button-secondary"><Settings2 size={16} /> Configurar</Link>}
-          <Link href="/projetos/novo" className="button button-primary"><Plus size={17} /> Novo projeto</Link>
+          <Link href="/projetos/novo" className="button button-secondary"><Plus size={17} /> Novo Epic</Link>
         </div>
       </header>
 
@@ -129,7 +123,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
       <form className="toolbar board-toolbar" action="/quadro">
         <input type="hidden" name="fluxo" value={workflow.id} />
-        <label className="toolbar-search"><Search size={16} /><span className="sr-only">Buscar no quadro</span><input name="q" defaultValue={filters.q ?? ""} placeholder="Buscar projeto, cliente ou tecnologia…" /></label>
+        <label className="toolbar-search"><Search size={16} /><span className="sr-only">Buscar no quadro</span><input name="q" defaultValue={filters.q ?? ""} placeholder="Buscar card, Epic ou cliente…" /></label>
         {workflow.sprintEnabled && (
           <label className="toolbar-control"><span>Sprint</span><select className="toolbar-button filter-select" name="sprint" defaultValue={filters.sprint ?? selectedSprint?.id ?? "todos"}>
             <option value="todos">Todos os planejados</option>
@@ -138,17 +132,15 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         )}
         <label className="sr-only" htmlFor="board-owner">Responsável</label>
         <select className="toolbar-button filter-select" id="board-owner" name="responsavel" defaultValue={filters.responsavel ?? ""}><option value="">Todos os responsáveis</option>{data.members.filter((member) => member.active).map((member) => <option value={member.id} key={member.id}>{member.name}</option>)}</select>
-        <label className="sr-only" htmlFor="board-state">Situação</label>
-        <select className="toolbar-button filter-select" id="board-state" name="situacao" defaultValue={filters.situacao ?? ""}><option value="">Todas as situações</option><option value="atrasado">Atrasados</option><option value="proximo">Prazo próximo</option><option value="bloqueado">Bloqueados</option><option value="cliente">Aguardando cliente</option></select>
         <button className="button button-secondary" type="submit"><ListFilter size={15} /> Aplicar</button>
       </form>
 
       <section className="content-section full-board configurable-board">
-        <div className="section-heading"><div><span className="eyebrow">{workflow.sprintEnabled ? "Sprint em foco" : "Fluxo contínuo"}</span><h2>{cards.length} {cards.length === 1 ? "projeto" : "projetos"}</h2></div><div className="section-actions"><span>Arraste os cartões ou use o seletor de etapa</span></div></div>
-        <ProjectKanban
-          key={`${workflow.id}:${filters.sprint ?? selectedSprint?.id ?? "all"}:${filters.q ?? ""}:${filters.responsavel ?? ""}:${filters.situacao ?? ""}`}
+        <div className="section-heading"><div><span className="eyebrow">{workflow.sprintEnabled ? "Sprint em foco" : "Fluxo contínuo"}</span><h2>{cards.length} {cards.length === 1 ? "card" : "cards"}</h2></div><div className="section-actions"><span>Arraste os cards ou use o seletor de etapa</span></div></div>
+        <WorkItemKanban
+          key={`${workflow.id}:${filters.sprint ?? selectedSprint?.id ?? "all"}:${filters.q ?? ""}:${filters.responsavel ?? ""}`}
           stages={stages}
-          initialProjects={cards}
+          initialCards={cards}
         />
       </section>
     </>

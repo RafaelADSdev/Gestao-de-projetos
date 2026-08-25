@@ -21,7 +21,7 @@ import {
   monthlyEquivalentCents,
 } from "@/lib/domain";
 import type { DashboardMetric, AgendaItemView, FinanceSummaryView, ActivityView } from "@/components/dashboard/dashboard-view";
-import type { BoardStageData, ProjectCardData, ProjectHealth } from "@/components/projects/types";
+import type { BoardStageData, ProjectCardData, ProjectHealth, WorkItemCardData } from "@/components/projects/types";
 
 const defaultStageColors: Record<string, string> = {
   entrada: "#94a3b8",
@@ -115,6 +115,52 @@ export type ProjectCardFilters = {
   includeArchived?: boolean;
 };
 
+export type WorkItemCardFilters = {
+  workflowId?: string;
+  sprintId?: string | null;
+  projectId?: string;
+  assigneeId?: string;
+};
+
+export function buildWorkItemCards(
+  data: AgencyData,
+  filters: WorkItemCardFilters = {},
+): WorkItemCardData[] {
+  return data.workItems
+    .filter((item) => item.archivedAt === null)
+    .filter((item) => !filters.workflowId || item.workflowId === filters.workflowId)
+    .filter((item) => filters.sprintId === undefined || item.sprintId === filters.sprintId)
+    .filter((item) => !filters.projectId || item.projectId === filters.projectId)
+    .filter((item) => !filters.assigneeId || item.assigneeIds.includes(filters.assigneeId))
+    .map((item) => {
+      const project = data.projects.find((entry) => entry.id === item.projectId);
+      const client = project ? data.clients.find((entry) => entry.id === project.clientId) : null;
+      const stage = data.boardStages.find(
+        (entry) => entry.workflowId === item.workflowId && entry.id === item.stageId,
+      );
+      const sprint = item.sprintId ? data.sprints.find((entry) => entry.id === item.sprintId) : null;
+      const assignees = item.assigneeIds
+        .map((memberId) => data.members.find((member) => member.id === memberId))
+        .filter((member): member is NonNullable<typeof member> => Boolean(member))
+        .map((member) => ({ id: member.id, name: member.name, avatarUrl: member.avatarUrl }));
+
+      return {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        projectId: item.projectId,
+        epicName: project?.name ?? "Epic não encontrado",
+        clientName: client?.name ?? "Cliente não informado",
+        workflowId: item.workflowId,
+        stageId: item.stageId,
+        stageName: stage?.label ?? item.stageId,
+        sprintId: item.sprintId,
+        sprintName: sprint?.name ?? null,
+        assignees,
+      };
+    });
+}
+
 export function buildProjectCards(
   data: AgencyData,
   now: Date | string,
@@ -178,15 +224,25 @@ export function buildProjectCards(
   });
 }
 
-export function buildDashboardMetrics(data: AgencyData, now: Date | string): DashboardMetric[] {
-  const snapshot = buildDashboardSnapshot(data, now);
-  return [
-    { label: "Projetos atrasados", value: String(snapshot.overdueProjects), note: "Precisam de uma nova ação hoje", tone: "danger", kind: "late" },
-    { label: "Próximos 7 dias", value: String(snapshot.deadlinesDueNext7Days), note: "Entregas e revisões no radar", tone: "warning", kind: "upcoming" },
-    { label: "Projetos bloqueados", value: String(snapshot.blockedProjects), note: "Precisam de decisão ou material", tone: "warning", kind: "blocked" },
-    { label: "Aguardando cliente", value: String(snapshot.waitingClientProjects), note: "Dependem de retorno externo", tone: "blue", kind: "waiting" },
-    { label: "Renovações em 30 dias", value: String(snapshot.renewalsNext30Days), note: "Domínios e serviços recorrentes", tone: "teal", kind: "renewal" },
-  ];
+export function buildStageMetrics(data: AgencyData): DashboardMetric[] {
+  const defaultWorkflow = getDefaultWorkflow(data);
+  if (!defaultWorkflow) return [];
+
+  const stages = buildBoardStages(data, defaultWorkflow.id);
+  const cards = data.workItems.filter(
+    (item) => item.archivedAt === null && item.workflowId === defaultWorkflow.id,
+  );
+
+  return stages.map((stage) => {
+    const count = cards.filter((item) => item.stageId === stage.id).length;
+    return {
+      label: stage.name,
+      value: String(count),
+      note: count === 0 ? "Nenhum card" : count === 1 ? "1 card ativo" : `${count} cards ativos`,
+      color: stage.color,
+      stageId: stage.id,
+    };
+  });
 }
 
 function dateParts(date: string) {
@@ -327,6 +383,7 @@ export function getProjectDetail(data: AgencyData, id: string, now: Date | strin
     terms: data.commercialTerms.find((item) => item.projectId === id) ?? null,
     subscriptions: buildSubscriptions(data, now).filter((item) => data.projectSubscriptions.some((link) => link.projectId === id && link.subscriptionId === item.id)),
     activity: data.activity.filter((item: ActivityEntry) => item.projectId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    workItems: buildWorkItemCards(data, { projectId: id }),
   };
 }
 

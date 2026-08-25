@@ -48,6 +48,8 @@ import {
   updateProjectAction,
 } from "@/app/(dashboard)/actions";
 import { ProjectPlanningFields } from "@/components/projects/project-planning-fields";
+import { EpicChildCards } from "@/components/projects/epic-child-cards";
+import { EpicQuickLinks } from "@/components/projects/epic-quick-links";
 import { DeleteActionForm } from "@/components/settings/delete-action-form";
 import { canSeeFinance, requireAuthContext } from "@/lib/auth";
 import { loadAgencyData } from "@/lib/data/agency";
@@ -252,7 +254,7 @@ export default async function ProjectDetailPage({
   return (
     <div className="project-detail-page">
       <Link href="/projetos" className="back-link">
-        <ArrowLeft size={15} /> Voltar ao portfólio
+        <ArrowLeft size={15} /> Voltar aos Epics
       </Link>
 
       <header className="project-detail-hero">
@@ -265,9 +267,9 @@ export default async function ProjectDetailPage({
               <span className="blocked-badge"><AlertTriangle size={13} /> Bloqueado</span>
             )}
           </div>
-          <span className="eyebrow">{detail.client?.name ?? "Cliente não informado"}</span>
+          <span className="eyebrow">{detail.client?.name ?? "Cliente não informado"} · Epic</span>
           <h1>{detail.project.name}</h1>
-          <p>{detail.project.description ?? "Adicione uma descrição para orientar a equipe."}</p>
+          <p>{detail.project.description ?? "Descrição, links (Git, site) e contexto do Epic ficam aqui — os cards do Kanban mostram só a tarefa em execução."}</p>
         </div>
         <div className="project-quick-facts" aria-label="Informações rápidas">
           <div><UserRound size={16} /><span><small>Responsável</small><strong>{detail.member?.name ?? "Não definido"}</strong></span></div>
@@ -309,8 +311,9 @@ export default async function ProjectDetailPage({
 
       {activeTab === "resumo" && (
         <section className="detail-two-column">
+          <div className="detail-main-stack">
           <form action={updateProject} className="panel detail-panel detail-form">
-            <div className="panel-heading"><div><span className="panel-icon blue"><FileText size={18} /></span><div><h2>Resumo do projeto</h2><p>Contexto e próxima ação para a equipe</p></div></div></div>
+            <div className="panel-heading"><div><span className="panel-icon blue"><FileText size={18} /></span><div><h2>Resumo do Epic</h2><p>Contexto, links e próxima ação macro</p></div></div></div>
             <div className="form-grid two">
               <label className="form-field full"><span>Nome do projeto</span><input className="input" name="name" required defaultValue={detail.project.name} /></label>
               <label className="form-field full"><span>Próxima ação</span><input className="input" name="next_action" defaultValue={detail.project.nextAction ?? ""} placeholder="Qual é o próximo passo concreto?" /></label>
@@ -322,7 +325,11 @@ export default async function ProjectDetailPage({
             <div className="form-actions"><button className="button button-primary" type="submit"><Save size={15} /> Salvar alterações</button></div>
           </form>
 
+          <EpicChildCards cards={detail.workItems} />
+          </div>
+
           <aside className="detail-side-stack">
+            <EpicQuickLinks resources={detail.resources} />
             <article className="panel project-health-card">
               <div className="panel-heading"><div><span className="panel-icon teal"><CheckCircle2 size={18} /></span><div><h2>Andamento</h2><p>Leitura rápida da entrega</p></div></div></div>
               <div className="large-progress"><span><strong>{checklistPercent}%</strong><small>do checklist concluído</small></span><i><em style={{ width: `${checklistPercent}%` }} /></i></div>

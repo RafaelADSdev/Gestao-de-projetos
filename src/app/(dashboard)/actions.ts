@@ -7,7 +7,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type ActionResult = { ok: true; demo?: boolean; id?: string; message?: string } | { ok: false; error: string };
 
-const WORKFLOW_REVALIDATION_PATHS = ["/quadro", "/projetos", "/configuracoes/fluxos"] as const;
+const WORKFLOW_REVALIDATION_PATHS = ["/quadro", "/backlog", "/projetos", "/configuracoes/fluxos"] as const;
 const TECHNOLOGY_CATEGORIES = new Set(["frontend", "backend", "database", "infrastructure", "design", "analytics", "other"]);
 const SPRINT_STATUSES = new Set(["planned", "active", "completed"]);
 const ADMINISTRATIVE_EXPENSE_CATEGORIES = new Set(["people", "software", "marketing", "office", "taxes", "banking", "other"]);
@@ -141,8 +141,15 @@ function revalidateProjectViews(projectId: string) {
   revalidatePath(`/projetos/${projectId}`);
   revalidatePath("/projetos");
   revalidatePath("/quadro");
+  revalidatePath("/backlog");
   revalidatePath("/portfolio");
   revalidatePath("/");
+}
+
+function revalidateWorkItemViews(projectId?: string) {
+  revalidatePath("/backlog");
+  revalidatePath("/quadro");
+  if (projectId) revalidatePath(`/projetos/${projectId}`);
 }
 
 async function tryImmediateCalendarSync(workspaceId: string) {
@@ -202,23 +209,164 @@ export async function moveProjectAction(projectId: string, stageId: string): Pro
 
 export async function createClientAction(formData: FormData): Promise<ActionResult> {
   const context = await requireAuthContext();
-  const name = text(formData, "name");
-  if (name.length < 2) return { ok: false, error: "Informe o nome do cliente." };
-  if (context.demo) return { ok: true, demo: true, id: `demo-${Date.now()}` };
+  const parsed = parseClientForm(formData);
+  if (!parsed.ok) return parsed;
+  if (context.demo) {
+    revalidatePath("/clientes");
+    return { ok: true, demo: true, id: `demo-${Date.now()}`, message: "Cliente cadastrado na demonstração." };
+  }
 
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.from("clients").insert({
     workspace_id: context.workspaceId,
-    name,
-    company_name: optionalText(formData, "company_name"),
-    email: optionalText(formData, "email"),
-    phone: optionalText(formData, "phone"),
-    notes: optionalText(formData, "notes"),
+    name: parsed.value.name,
+    company_name: parsed.value.companyName,
+    contact_name: parsed.value.contactName,
+    email: parsed.value.email,
+    phone: parsed.value.phone,
+    notes: parsed.value.notes,
     created_by: context.userId,
   }).select("id").single();
-  if (error) return { ok: false, error: "Não foi possível cadastrar o cliente." };
+  if (error || !data) return { ok: false, error: "Não foi possível cadastrar o cliente." };
+
+  const avatarResult = await persistClientAvatar(supabase, context.workspaceId, data.id, parsed.value.avatar, parsed.value.removeAvatar);
+  if (!avatarResult.ok) return avatarResult;
+  if (avatarResult.avatarUrl) {
+    await supabase.from("clients").update({ avatar_url: avatarResult.avatarUrl }).eq("id", data.id).eq("workspace_id", context.workspaceId);
+  }
+
   revalidatePath("/clientes");
-  return { ok: true, id: data.id };
+  return { ok: true, id: data.id, message: "Cliente cadastrado com sucesso." };
+}
+
+export async function updateClientAction(clientId: string, formData: FormData): Promise<ActionResult> {
+  const context = await requireAuthContext();
+  if (!clientId) return { ok: false, error: "Cliente não informado." };
+  const parsed = parseClientForm(formData);
+  if (!parsed.ok) return parsed;
+  if (context.demo) {
+    revalidatePath("/clientes");
+    return { ok: true, demo: true, message: "Cliente atualizado na demonstração." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: existing } = await supabase
+    .from("clients")
+    .select("id, avatar_url")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", clientId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "Cliente não encontrado neste workspace." };
+
+  const avatarResult = await persistClientAvatar(
+    supabase,
+    context.workspaceId,
+    clientId,
+    parsed.value.avatar,
+    parsed.value.removeAvatar,
+    existing.avatar_url,
+  );
+  if (!avatarResult.ok) return avatarResult;
+
+  const { error } = await supabase.from("clients").update({
+    name: parsed.value.name,
+    company_name: parsed.value.companyName,
+    contact_name: parsed.value.contactName,
+    email: parsed.value.email,
+    phone: parsed.value.phone,
+    notes: parsed.value.notes,
+    avatar_url: avatarResult.avatarUrl,
+  }).eq("workspace_id", context.workspaceId).eq("id", clientId);
+  if (error) return { ok: false, error: "Não foi possível atualizar o cliente." };
+  revalidatePath("/clientes");
+  return { ok: true, message: "Cliente atualizado com sucesso." };
+}
+
+function parseClientForm(formData: FormData):
+  | { ok: false; error: string }
+  | {
+    ok: true;
+    value: {
+      name: string;
+      companyName: string | null;
+      contactName: string | null;
+      email: string | null;
+      phone: string | null;
+      notes: string | null;
+      avatar: File | null;
+      removeAvatar: boolean;
+    };
+  } {
+  const name = text(formData, "name");
+  const companyName = optionalText(formData, "company_name");
+  const contactName = optionalText(formData, "contact_name");
+  const email = optionalText(formData, "email");
+  const phone = optionalText(formData, "phone");
+  const notes = optionalText(formData, "notes");
+  const removeAvatar = formData.get("remove_avatar") === "on";
+  const avatarField = formData.get("avatar");
+  const avatar = avatarField instanceof File && avatarField.size > 0 ? avatarField : null;
+
+  if (name.length < 2 || name.length > 160) {
+    return { ok: false, error: "Informe um nome entre 2 e 160 caracteres." };
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Informe um e-mail válido." };
+  }
+  if (notes && notes.length > 2000) {
+    return { ok: false, error: "As observações podem ter no máximo 2000 caracteres." };
+  }
+  if (avatar) {
+    if (!ALLOWED_CLIENT_AVATAR_TYPES.has(avatar.type)) {
+      return { ok: false, error: "Escolha uma imagem JPG, PNG ou WebP." };
+    }
+    if (avatar.size > MAX_CLIENT_AVATAR_BYTES) {
+      return { ok: false, error: "A foto precisa ter no máximo 2 MB." };
+    }
+  }
+
+  return {
+    ok: true,
+    value: { name, companyName, contactName, email, phone, notes, avatar, removeAvatar },
+  };
+}
+
+const ALLOWED_CLIENT_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_CLIENT_AVATAR_BYTES = 2 * 1024 * 1024;
+
+async function persistClientAvatar(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  workspaceId: string,
+  clientId: string,
+  avatar: File | null,
+  removeAvatar: boolean,
+  currentUrl: string | null = null,
+): Promise<{ ok: true; avatarUrl: string | null } | { ok: false; error: string }> {
+  const objectPath = `${workspaceId}/${clientId}/avatar`;
+  let avatarUrl = currentUrl;
+
+  if (removeAvatar) {
+    const { error } = await supabase.storage.from("client-avatars").remove([objectPath]);
+    if (error) return { ok: false, error: "Não foi possível remover a foto do cliente." };
+    avatarUrl = null;
+  }
+
+  if (avatar) {
+    const bytes = new Uint8Array(await avatar.arrayBuffer());
+    const { error: uploadError } = await supabase.storage
+      .from("client-avatars")
+      .upload(objectPath, bytes, {
+        cacheControl: "3600",
+        contentType: avatar.type,
+        upsert: true,
+      });
+    if (uploadError) return { ok: false, error: "Não foi possível enviar a foto do cliente." };
+    const publicUrl = supabase.storage.from("client-avatars").getPublicUrl(objectPath).data.publicUrl;
+    avatarUrl = `${publicUrl}?v=${Date.now()}`;
+  }
+
+  return { ok: true, avatarUrl };
 }
 
 export async function createProjectAction(formData: FormData): Promise<ActionResult> {
@@ -1489,4 +1637,199 @@ export async function deleteTechnologyAction(technologyId: string): Promise<Acti
   revalidateWorkflowViews();
   revalidatePath("/portfolio");
   return { ok: true, message: `Tecnologia “${technology.name}” excluída de ${projectIds.length} projeto(s).` };
+}
+
+function workItemMigrationMessage(error: { code?: string; message?: string } | null) {
+  return error?.code === "PGRST205" && error.message?.includes("work_items")
+    ? "A tabela de cards ainda não foi criada no Supabase. Execute a migração work_items antes de continuar."
+    : null;
+}
+
+export async function createWorkItemAction(formData: FormData): Promise<ActionResult> {
+  const context = await requireAuthContext();
+  const projectId = text(formData, "project_id");
+  const title = text(formData, "title");
+  const description = optionalText(formData, "description");
+  const sprintId = optionalText(formData, "sprint_id");
+  const assigneeIds = formValues(formData, "assignee_ids");
+
+  if (!projectId) return { ok: false, error: "Selecione o Epic (projeto) do card." };
+  if (title.length < 2 || title.length > 200) return { ok: false, error: "Informe um título entre 2 e 200 caracteres." };
+  if (context.demo) {
+    revalidateWorkItemViews(projectId);
+    return { ok: true, demo: true, id: `demo-card-${Date.now()}`, message: "Card criado na demonstração." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, workflow_id, archived_at")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project || project.archived_at) return { ok: false, error: "Epic não encontrado neste workspace." };
+
+  const { data: columns } = await supabase
+    .from("board_columns")
+    .select("id, position")
+    .eq("workspace_id", context.workspaceId)
+    .eq("workflow_id", project.workflow_id)
+    .is("archived_at", null)
+    .order("position", { ascending: true })
+    .limit(1);
+  const firstColumn = columns?.[0];
+  if (!firstColumn) return { ok: false, error: "O fluxo do Epic não possui etapas configuradas." };
+
+  if (sprintId) {
+    const { data: sprint } = await supabase
+      .from("sprints")
+      .select("id")
+      .eq("workspace_id", context.workspaceId)
+      .eq("id", sprintId)
+      .eq("workflow_id", project.workflow_id)
+      .neq("status", "completed")
+      .maybeSingle();
+    if (!sprint) return { ok: false, error: "A sprint precisa estar aberta e pertencer ao fluxo do Epic." };
+  }
+
+  const { data: created, error } = await supabase
+    .from("work_items")
+    .insert({
+      workspace_id: context.workspaceId,
+      project_id: projectId,
+      workflow_id: project.workflow_id,
+      board_column_id: firstColumn.id,
+      sprint_id: sprintId,
+      title,
+      description,
+      created_by: context.userId,
+      updated_by: context.userId,
+    })
+    .select("id")
+    .single();
+  const migrationMessage = workItemMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (error || !created) return { ok: false, error: "Não foi possível criar o card." };
+
+  if (assigneeIds.length) {
+    const { error: assigneeError } = await supabase.from("work_item_assignees").insert(
+      assigneeIds.map((memberId) => ({
+        workspace_id: context.workspaceId,
+        work_item_id: created.id,
+        member_id: memberId,
+      })),
+    );
+    if (assigneeError) return { ok: false, error: "Card criado, mas não foi possível salvar os responsáveis." };
+  }
+
+  await supabase.from("project_activity").insert({
+    workspace_id: context.workspaceId,
+    project_id: projectId,
+    actor_id: context.userId,
+    action: "work_item_created",
+    entity_type: "work_item",
+    entity_id: created.id,
+    metadata: { title, sprint_id: sprintId, assignee_ids: assigneeIds },
+  });
+  revalidateWorkItemViews(projectId);
+  return { ok: true, id: created.id, message: "Card criado com sucesso." };
+}
+
+export async function assignWorkItemSprintAction(workItemId: string, sprintId: string | null): Promise<ActionResult> {
+  const context = await requireAuthContext();
+  if (!workItemId) return { ok: false, error: "Card inválido." };
+  if (context.demo) {
+    revalidateWorkItemViews();
+    return { ok: true, demo: true };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: item } = await supabase
+    .from("work_items")
+    .select("id, project_id, workflow_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Card não encontrado neste workspace." };
+
+  if (sprintId) {
+    const { data: sprint } = await supabase
+      .from("sprints")
+      .select("id")
+      .eq("workspace_id", context.workspaceId)
+      .eq("id", sprintId)
+      .eq("workflow_id", item.workflow_id)
+      .neq("status", "completed")
+      .maybeSingle();
+    if (!sprint) return { ok: false, error: "A sprint precisa estar aberta e pertencer ao fluxo do card." };
+  }
+
+  const { error } = await supabase
+    .from("work_items")
+    .update({ sprint_id: sprintId, updated_by: context.userId })
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId);
+  const migrationMessage = workItemMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (error) return { ok: false, error: "Não foi possível mover o card." };
+
+  await supabase.from("project_activity").insert({
+    workspace_id: context.workspaceId,
+    project_id: item.project_id,
+    actor_id: context.userId,
+    action: sprintId ? "work_item_sprint_assigned" : "work_item_moved_to_backlog",
+    entity_type: "work_item",
+    entity_id: workItemId,
+    metadata: { sprint_id: sprintId },
+  });
+  revalidateWorkItemViews(item.project_id);
+  return { ok: true, message: sprintId ? "Card incluído na sprint." : "Card movido para o backlog." };
+}
+
+export async function moveWorkItemAction(workItemId: string, stageId: string): Promise<ActionResult> {
+  const context = await requireAuthContext();
+  if (!workItemId || !stageId) return { ok: false, error: "Card e etapa são obrigatórios." };
+  if (context.demo) {
+    revalidateWorkItemViews();
+    return { ok: true, demo: true };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: item } = await supabase
+    .from("work_items")
+    .select("id, project_id, workflow_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "Card não encontrado neste workspace." };
+
+  const { data: columns } = await supabase
+    .from("board_columns")
+    .select("id, key")
+    .eq("workspace_id", context.workspaceId)
+    .eq("workflow_id", item.workflow_id)
+    .is("archived_at", null);
+  const column = columns?.find((entry) => entry.id === stageId || entry.key === stageId);
+  if (!column) return { ok: false, error: "A etapa informada não existe." };
+
+  const { error } = await supabase
+    .from("work_items")
+    .update({ board_column_id: column.id, updated_by: context.userId })
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId);
+  const migrationMessage = workItemMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (error) return { ok: false, error: "Não foi possível mover o card." };
+
+  await supabase.from("project_activity").insert({
+    workspace_id: context.workspaceId,
+    project_id: item.project_id,
+    actor_id: context.userId,
+    action: "work_item_stage_changed",
+    entity_type: "work_item",
+    entity_id: workItemId,
+    metadata: { board_column_id: column.id, stage_key: column.key },
+  });
+  revalidateWorkItemViews(item.project_id);
+  return { ok: true };
 }

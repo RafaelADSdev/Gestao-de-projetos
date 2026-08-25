@@ -14,6 +14,21 @@ export type ProjectTechnologyView = {
   color: string;
 };
 
+export type WorkItemCardData = {
+  id: string;
+  title: string;
+  description: string | null;
+  projectId: string;
+  epicName: string;
+  clientName: string;
+  workflowId: string;
+  stageId: string;
+  stageName: string;
+  sprintId: string | null;
+  sprintName: string | null;
+  assignees: { id: string; name: string; avatarUrl: string | null }[];
+};
+
 export type ProjectCardData = {
   id: string;
   name: string;

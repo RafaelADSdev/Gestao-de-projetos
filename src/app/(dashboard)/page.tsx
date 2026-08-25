@@ -5,9 +5,9 @@ import {
   buildActivity,
   buildAgenda,
   buildBoardStages,
-  buildDashboardMetrics,
+  buildStageMetrics,
   buildFinanceSummary,
-  buildProjectCards,
+  buildWorkItemCards,
 } from "@/lib/data/view-models";
 
 export default async function DashboardPage() {
@@ -16,14 +16,16 @@ export default async function DashboardPage() {
   const dateLabel = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Sao_Paulo" }).format(new Date(now));
   const defaultWorkflow = data.workflows.find((workflow) => workflow.isDefault && !workflow.archivedAt)
     ?? data.workflows.find((workflow) => !workflow.archivedAt);
-  const projects = buildProjectCards(data, now).filter((project) => !defaultWorkflow || project.workflowId === defaultWorkflow.id);
+  const cards = defaultWorkflow
+    ? buildWorkItemCards(data, { workflowId: defaultWorkflow.id })
+    : [];
 
   return <DashboardView
     name={context.name}
     dateLabel={dateLabel}
-    metrics={buildDashboardMetrics(data, now)}
+    metrics={buildStageMetrics(data)}
     stages={defaultWorkflow ? buildBoardStages(data, defaultWorkflow.id) : []}
-    projects={projects}
+    cards={cards}
     agenda={buildAgenda(data, now)}
     finance={buildFinanceSummary(data, now)}
     activity={buildActivity(data, now)}

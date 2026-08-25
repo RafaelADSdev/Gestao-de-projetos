@@ -38,6 +38,7 @@ export interface Client {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  avatarUrl: string | null;
   createdAt: ISODateTime;
 }
 
@@ -195,6 +196,24 @@ export interface ChecklistItem {
   completed: boolean;
   completedAt: ISODateTime | null;
   assigneeId: string | null;
+}
+
+export interface WorkItem {
+  id: string;
+  workspaceId: string;
+  /** Parent Epic — each project groups its executable cards. */
+  projectId: string;
+  workflowId: string;
+  stageId: BoardStageId;
+  /** Null means backlog when the workflow uses sprints. */
+  sprintId: string | null;
+  title: string;
+  description: string | null;
+  sortOrder: number;
+  assigneeIds: readonly string[];
+  archivedAt: ISODateTime | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
 }
 
 export type DeadlineKind =
@@ -411,6 +430,7 @@ export interface AgencyData {
   technologies: readonly Technology[];
   projectTechnologies: readonly ProjectTechnology[];
   projects: readonly Project[];
+  workItems: readonly WorkItem[];
   checklistItems: readonly ChecklistItem[];
   deadlines: readonly Deadline[];
   resources: readonly ProjectResource[];

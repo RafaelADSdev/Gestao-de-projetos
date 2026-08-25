@@ -23,6 +23,7 @@ import type {
   Subscription,
   Technology,
   TechnologyCategory,
+  WorkItem,
   Workflow,
   WorkspaceBoardStage,
   WorkspaceRole,
@@ -65,6 +66,7 @@ type ClientRow = {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  avatar_url: string | null;
   created_at: string;
 };
 
@@ -154,6 +156,27 @@ type ProjectRow = {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type WorkItemRow = {
+  id: string;
+  workspace_id: string;
+  project_id: string;
+  workflow_id: string;
+  board_column_id: string;
+  sprint_id: string | null;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type WorkItemAssigneeRow = {
+  work_item_id: string;
+  workspace_id: string;
+  member_id: string;
 };
 
 type ChecklistRow = {
@@ -345,6 +368,8 @@ export async function loadSupabaseAgencyData(
     subscriptionsResult,
     projectSubscriptionsResult,
     activityResult,
+    workItemsResult,
+    workItemAssigneesResult,
   ] = await Promise.all([
     supabase
       .from("workspaces")
@@ -361,7 +386,7 @@ export async function loadSupabaseAgencyData(
     supabase
       .from("clients")
       .select(
-        "id, workspace_id, name, company_name, contact_name, email, phone, notes, created_at",
+        "id, workspace_id, name, company_name, contact_name, email, phone, notes, avatar_url, created_at",
       )
       .eq("workspace_id", workspaceId)
       .is("archived_at", null)
@@ -451,6 +476,17 @@ export async function loadSupabaseAgencyData(
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(250),
+    supabase
+      .from("work_items")
+      .select(
+        "id, workspace_id, project_id, workflow_id, board_column_id, sprint_id, title, description, sort_order, archived_at, created_at, updated_at",
+      )
+      .eq("workspace_id", workspaceId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("work_item_assignees")
+      .select("work_item_id, workspace_id, member_id")
+      .eq("workspace_id", workspaceId),
   ]);
 
   const workspace = requireRecord<WorkspaceRow>(workspaceResult, "workspace");
@@ -466,6 +502,7 @@ export async function loadSupabaseAgencyData(
     email: row.email,
     phone: row.phone,
     notes: row.notes,
+    avatarUrl: row.avatar_url ?? null,
     createdAt: row.created_at,
   }));
 
@@ -499,6 +536,19 @@ export async function loadSupabaseAgencyData(
 
   const projects = requireRows<ProjectRow>(projectsResult, "projetos").map((row) =>
     mapProject(row, columnByDatabaseId, templateById),
+  );
+  const workItemAssigneeRows = requireRowsAllowMissingTable<WorkItemAssigneeRow>(
+    workItemAssigneesResult,
+    "responsáveis dos cards",
+  );
+  const assigneesByWorkItem = new Map<string, string[]>();
+  workItemAssigneeRows.forEach((row) => {
+    const current = assigneesByWorkItem.get(row.work_item_id) ?? [];
+    current.push(row.member_id);
+    assigneesByWorkItem.set(row.work_item_id, current);
+  });
+  const workItems = requireRowsAllowMissingTable<WorkItemRow>(workItemsResult, "cards").map((row) =>
+    mapWorkItem(row, columnByDatabaseId, assigneesByWorkItem.get(row.id) ?? []),
   );
   const checklistItems = requireRows<ChecklistRow>(
     checklistResult,
@@ -674,6 +724,7 @@ export async function loadSupabaseAgencyData(
     technologies,
     projectTechnologies,
     projects,
+    workItems,
     checklistItems,
     deadlines,
     resources,
@@ -808,6 +859,32 @@ function mapProject(
     blockerReason: row.blocker_reason,
     startedAt: dateOnly(row.started_at),
     publishedAt: dateOnly(row.published_at),
+    archivedAt: row.archived_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapWorkItem(
+  row: WorkItemRow,
+  columnByDatabaseId: Map<string, WorkspaceBoardStage>,
+  assigneeIds: string[],
+): WorkItem {
+  const stage = columnByDatabaseId.get(row.board_column_id);
+  if (!stage) {
+    throw new Error(`Coluna ${row.board_column_id} não encontrada para o card ${row.id}.`);
+  }
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    workflowId: row.workflow_id,
+    stageId: stage.key ?? stage.id,
+    sprintId: row.sprint_id,
+    title: row.title,
+    description: row.description,
+    sortOrder: row.sort_order,
+    assigneeIds,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1054,6 +1131,9 @@ function requireRows<T>(result: unknown, label: string): T[] {
 function requireRowsAllowMissingTable<T>(result: unknown, label: string): T[] {
   const typed = result as QueryResult<T[]>;
   if (typed.error?.code === "PGRST205" && typed.error.message?.includes("administrative_expenses")) {
+    return [];
+  }
+  if (typed.error?.code === "PGRST205" && (typed.error.message?.includes("work_items") || typed.error.message?.includes("work_item_assignees"))) {
     return [];
   }
   return requireRows<T>(result, label);

@@ -1,26 +1,22 @@
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarClock,
   CheckCircle2,
   CircleDollarSign,
-  Clock3,
   ExternalLink,
-  Hourglass,
-  RefreshCw,
   TrendingUp,
   UsersRound,
 } from "lucide-react";
-import { ProjectKanban } from "@/components/projects/project-kanban";
-import type { BoardStageData, ProjectCardData } from "@/components/projects/types";
+import { WorkItemKanban } from "@/components/projects/work-item-kanban";
+import type { BoardStageData, WorkItemCardData } from "@/components/projects/types";
 
 export type DashboardMetric = {
   label: string;
   value: string;
   note: string;
-  tone: "danger" | "warning" | "blue" | "teal";
-  kind: "late" | "upcoming" | "blocked" | "waiting" | "renewal";
+  color: string;
+  stageId: string;
 };
 
 export type AgendaItemView = {
@@ -42,14 +38,12 @@ export type FinanceSummaryView = {
 
 export type ActivityView = { id: string; text: string; actor: string; when: string; tone: string };
 
-const metricIcons = { late: AlertTriangle, upcoming: Clock3, blocked: AlertTriangle, waiting: Hourglass, renewal: RefreshCw };
-
 export function DashboardView({
   name,
   dateLabel,
   metrics,
   stages,
-  projects,
+  cards,
   agenda,
   finance,
   activity,
@@ -59,7 +53,7 @@ export function DashboardView({
   dateLabel: string;
   metrics: DashboardMetric[];
   stages: BoardStageData[];
-  projects: ProjectCardData[];
+  cards: WorkItemCardData[];
   agenda: AgendaItemView[];
   finance: FinanceSummaryView;
   activity: ActivityView[];
@@ -72,23 +66,22 @@ export function DashboardView({
         <div className="heading-status"><span className="status-pulse" />Todos os sistemas operacionais</div>
       </header>
 
-      <section className="metrics-grid" aria-label="Indicadores de atenção">
-        {metrics.map((metric) => {
-          const Icon = metricIcons[metric.kind];
-          return <Link href={metric.kind === "renewal" ? "/financeiro" : "/quadro"} className={`metric-card ${metric.tone}`} key={metric.label}>
-            <span className="metric-icon"><Icon size={19} /></span>
+      <section className="metrics-grid stage-metrics-grid" aria-label="Cards por fase do Kanban">
+        {metrics.map((metric) => (
+          <Link href="/quadro" className="metric-card stage-metric-card" key={metric.stageId} style={{ color: metric.color }}>
+            <span className="metric-icon stage-metric-icon"><span className="stage-dot" style={{ background: metric.color }} /></span>
             <div><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.note}</small></div>
             <ArrowRight className="metric-arrow" size={17} />
-          </Link>;
-        })}
+          </Link>
+        ))}
       </section>
 
       <section className="content-section board-section">
         <div className="section-heading">
-          <div><span className="eyebrow">Fluxo de trabalho</span><h2>Projetos ativos</h2></div>
-          <div className="section-actions"><span>{projects.length} no fluxo principal</span><Link href="/quadro">Abrir Kanban <ArrowRight size={15} /></Link></div>
+          <div><span className="eyebrow">Fluxo de trabalho</span><h2>Cards em execução</h2></div>
+          <div className="section-actions"><span>{cards.length} no fluxo principal</span><Link href="/quadro">Abrir Kanban <ArrowRight size={15} /></Link></div>
         </div>
-        <ProjectKanban stages={stages} initialProjects={projects} />
+        <WorkItemKanban stages={stages} initialCards={cards} />
       </section>
 
       <section className="dashboard-lower-grid">
