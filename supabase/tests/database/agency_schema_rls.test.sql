@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(103);
+select plan(110);
 
 select is(
   (
@@ -1344,6 +1344,105 @@ select is(
   ),
   1::bigint,
   'profile changes synchronize readable snapshots into immutable access audit events'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_catalog.pg_class as relation
+    join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname = 'public'
+      and relation.relkind = 'r'
+      and relation.relname = any(array[
+        'work_item_checklist_items', 'work_item_comments'
+      ])
+  ),
+  2::bigint,
+  'work item collaboration tables exist'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_catalog.pg_class as relation
+    join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname = 'public'
+      and relation.relrowsecurity
+      and relation.relname = any(array[
+        'work_item_checklist_items', 'work_item_comments'
+      ])
+  ),
+  2::bigint,
+  'RLS is enabled on work item collaboration tables'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from unnest(array[
+      'public.work_item_checklist_items', 'public.work_item_comments'
+    ]) as table_name
+    where has_table_privilege('anon', table_name, 'select')
+  ),
+  0::bigint,
+  'anon cannot read work item collaboration data'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from unnest(array[
+      'public.work_item_checklist_items', 'public.work_item_comments'
+    ]) as table_name
+    where has_table_privilege('authenticated', table_name, 'select')
+      and has_table_privilege('authenticated', table_name, 'insert')
+      and has_table_privilege('authenticated', table_name, 'update')
+      and has_table_privilege('authenticated', table_name, 'delete')
+  ),
+  2::bigint,
+  'authenticated receives explicit collaboration Data API grants'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_catalog.pg_policies
+    where schemaname = 'public'
+      and tablename = any(array[
+        'work_item_checklist_items', 'work_item_comments'
+      ])
+  ),
+  8::bigint,
+  'collaboration tables define explicit CRUD policies'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_catalog.pg_constraint
+    where connamespace = 'public'::regnamespace
+      and conname = any(array[
+        'work_item_checklist_items_work_item_fk',
+        'work_item_comments_work_item_fk'
+      ])
+      and contype = 'f'
+  ),
+  2::bigint,
+  'collaboration rows use tenant-scoped work item foreign keys'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_catalog.pg_trigger
+    where not tgisinternal
+      and tgname = any(array[
+        'work_item_checklist_items_set_updated_at',
+        'work_item_comments_set_updated_at'
+      ])
+  ),
+  2::bigint,
+  'collaboration entities reuse the updated_at trigger'
 );
 
 select * from finish();

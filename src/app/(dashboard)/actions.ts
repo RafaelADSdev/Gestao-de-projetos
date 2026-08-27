@@ -1645,6 +1645,42 @@ function workItemMigrationMessage(error: { code?: string; message?: string } | n
     : null;
 }
 
+function workItemCollaborationMigrationMessage(error: { code?: string; message?: string } | null) {
+  const missingCollaborationTable = error?.message?.includes("work_item_checklist_items")
+    || error?.message?.includes("work_item_comments");
+  return (error?.code === "PGRST205" || error?.code === "42P01") && missingCollaborationTable
+    ? "Comentários e checklist ainda não foram criados no Supabase. Execute a migração work_item_collaboration."
+    : null;
+}
+
+export type WorkItemChecklistItemData = {
+  id: string;
+  title: string;
+  position: number;
+  completedAt: string | null;
+  createdAt: string;
+};
+
+export type WorkItemCommentData = {
+  id: string;
+  body: string;
+  authorId: string | null;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  createdAt: string;
+};
+
+export type WorkItemCollaborationData = {
+  workItemId: string;
+  checklist: WorkItemChecklistItemData[];
+  comments: WorkItemCommentData[];
+  viewer: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+};
+
 export async function createWorkItemAction(formData: FormData): Promise<ActionResult> {
   const context = await requireAuthContext();
   const projectId = text(formData, "project_id");
@@ -1899,4 +1935,330 @@ export async function updateWorkItemAction(workItemId: string, formData: FormDat
   });
   revalidateWorkItemViews(item.project_id);
   return { ok: true, message: "Card atualizado com sucesso." };
+}
+
+export async function loadWorkItemCollaborationAction(
+  workItemId: string,
+): Promise<{ ok: true; data: WorkItemCollaborationData } | { ok: false; error: string }> {
+  const context = await requireAuthContext();
+  if (!workItemId) return { ok: false, error: "Card inválido." };
+
+  const viewer = {
+    id: context.userId,
+    name: context.name,
+    avatarUrl: context.avatarUrl,
+  };
+  if (context.demo) {
+    return {
+      ok: true,
+      data: { workItemId, checklist: [], comments: [], viewer },
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: item, error: itemError } = await supabase
+    .from("work_items")
+    .select("id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (itemError) return { ok: false, error: "Não foi possível abrir a atividade do card." };
+  if (!item) return { ok: false, error: "Card não encontrado neste workspace." };
+
+  const [checklistResult, commentsResult] = await Promise.all([
+    supabase
+      .from("work_item_checklist_items")
+      .select("id, title, position, completed_at, created_at")
+      .eq("workspace_id", context.workspaceId)
+      .eq("work_item_id", workItemId)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(250),
+    supabase
+      .from("work_item_comments")
+      .select("id, body, author_id, created_at, author:profiles!work_item_comments_author_id_fkey(full_name, avatar_url)")
+      .eq("workspace_id", context.workspaceId)
+      .eq("work_item_id", workItemId)
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
+
+  const migrationMessage = workItemCollaborationMigrationMessage(checklistResult.error)
+    ?? workItemCollaborationMigrationMessage(commentsResult.error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (checklistResult.error || commentsResult.error) {
+    return { ok: false, error: "Não foi possível carregar comentários e checklist." };
+  }
+
+  const checklist = (checklistResult.data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    position: row.position,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+  }));
+  const comments = (commentsResult.data ?? []).map((row) => {
+    const author = Array.isArray(row.author) ? row.author[0] : row.author;
+    return {
+      id: row.id,
+      body: row.body,
+      authorId: row.author_id,
+      authorName: author?.full_name?.trim() || "Integrante removido",
+      authorAvatarUrl: author?.avatar_url ?? null,
+      createdAt: row.created_at,
+    };
+  }).reverse();
+
+  return {
+    ok: true,
+    data: { workItemId, checklist, comments, viewer },
+  };
+}
+
+export async function addWorkItemChecklistItemAction(
+  workItemId: string,
+  formData: FormData,
+): Promise<{ ok: true; item: WorkItemChecklistItemData; demo?: boolean } | { ok: false; error: string }> {
+  const context = await requireAuthContext();
+  const title = text(formData, "title");
+  if (!workItemId) return { ok: false, error: "Card inválido." };
+  if (title.length < 2 || title.length > 240) {
+    return { ok: false, error: "Informe um item entre 2 e 240 caracteres." };
+  }
+
+  const createdAt = new Date().toISOString();
+  if (context.demo) {
+    return {
+      ok: true,
+      demo: true,
+      item: {
+        id: `demo-checklist-${Date.now()}`,
+        title,
+        position: Date.now(),
+        completedAt: null,
+        createdAt,
+      },
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: workItem } = await supabase
+    .from("work_items")
+    .select("id, project_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (!workItem) return { ok: false, error: "Card não encontrado neste workspace." };
+
+  const { data: lastItem, error: positionError } = await supabase
+    .from("work_item_checklist_items")
+    .select("position")
+    .eq("workspace_id", context.workspaceId)
+    .eq("work_item_id", workItemId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const migrationMessage = workItemCollaborationMigrationMessage(positionError);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (positionError) return { ok: false, error: "Não foi possível preparar o checklist." };
+
+  const { data: created, error } = await supabase
+    .from("work_item_checklist_items")
+    .insert({
+      workspace_id: context.workspaceId,
+      work_item_id: workItemId,
+      title,
+      position: (lastItem?.position ?? -1) + 1,
+      created_by: context.userId,
+    })
+    .select("id, title, position, completed_at, created_at")
+    .single();
+  const insertMigrationMessage = workItemCollaborationMigrationMessage(error);
+  if (insertMigrationMessage) return { ok: false, error: insertMigrationMessage };
+  if (error || !created) return { ok: false, error: "Não foi possível adicionar o item ao checklist." };
+
+  await supabase.from("project_activity").insert({
+    workspace_id: context.workspaceId,
+    project_id: workItem.project_id,
+    actor_id: context.userId,
+    action: "work_item_checklist_created",
+    entity_type: "work_item_checklist_item",
+    entity_id: created.id,
+    metadata: { summary: `Adicionou “${title}” ao checklist do card.`, work_item_id: workItemId },
+  });
+  revalidateWorkItemViews(workItem.project_id);
+  return {
+    ok: true,
+    item: {
+      id: created.id,
+      title: created.title,
+      position: created.position,
+      completedAt: created.completed_at,
+      createdAt: created.created_at,
+    },
+  };
+}
+
+export async function toggleWorkItemChecklistItemAction(
+  itemId: string,
+  completed: boolean,
+): Promise<{ ok: true; completedAt: string | null; demo?: boolean } | { ok: false; error: string }> {
+  const context = await requireAuthContext();
+  if (!itemId) return { ok: false, error: "Item do checklist inválido." };
+  const completedAt = completed ? new Date().toISOString() : null;
+  if (context.demo) return { ok: true, demo: true, completedAt };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: item, error: readError } = await supabase
+    .from("work_item_checklist_items")
+    .select("id, work_item_id, title")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", itemId)
+    .maybeSingle();
+  const migrationMessage = workItemCollaborationMigrationMessage(readError);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (readError || !item) return { ok: false, error: "Item do checklist não encontrado." };
+
+  const { data: updated, error } = await supabase
+    .from("work_item_checklist_items")
+    .update({
+      completed_at: completedAt,
+      completed_by: completed ? context.userId : null,
+    })
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", itemId)
+    .select("id")
+    .maybeSingle();
+  if (error || !updated) return { ok: false, error: "Não foi possível atualizar o checklist." };
+
+  const { data: workItem } = await supabase
+    .from("work_items")
+    .select("project_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", item.work_item_id)
+    .maybeSingle();
+  if (workItem) {
+    await supabase.from("project_activity").insert({
+      workspace_id: context.workspaceId,
+      project_id: workItem.project_id,
+      actor_id: context.userId,
+      action: completed ? "work_item_checklist_completed" : "work_item_checklist_reopened",
+      entity_type: "work_item_checklist_item",
+      entity_id: itemId,
+      metadata: { summary: `${completed ? "Concluiu" : "Reabriu"} “${item.title}”.`, work_item_id: item.work_item_id },
+    });
+    revalidateWorkItemViews(workItem.project_id);
+  }
+  return { ok: true, completedAt };
+}
+
+export async function deleteWorkItemChecklistItemAction(itemId: string): Promise<ActionResult> {
+  const context = await requireAuthContext();
+  if (!itemId) return { ok: false, error: "Item do checklist inválido." };
+  if (context.demo) return { ok: true, demo: true };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: item, error: readError } = await supabase
+    .from("work_item_checklist_items")
+    .select("id, work_item_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", itemId)
+    .maybeSingle();
+  const migrationMessage = workItemCollaborationMigrationMessage(readError);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (readError || !item) return { ok: false, error: "Item do checklist não encontrado." };
+
+  const { data: deleted, error } = await supabase
+    .from("work_item_checklist_items")
+    .delete()
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", itemId)
+    .select("id")
+    .maybeSingle();
+  if (error || !deleted) return { ok: false, error: "Não foi possível excluir o item do checklist." };
+
+  const { data: workItem } = await supabase
+    .from("work_items")
+    .select("project_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", item.work_item_id)
+    .maybeSingle();
+  if (workItem) revalidateWorkItemViews(workItem.project_id);
+  return { ok: true, message: "Item excluído do checklist." };
+}
+
+export async function addWorkItemCommentAction(
+  workItemId: string,
+  formData: FormData,
+): Promise<{ ok: true; comment: WorkItemCommentData; demo?: boolean } | { ok: false; error: string }> {
+  const context = await requireAuthContext();
+  const body = text(formData, "body");
+  if (!workItemId) return { ok: false, error: "Card inválido." };
+  if (!body || body.length > 4000) {
+    return { ok: false, error: "O comentário deve ter entre 1 e 4.000 caracteres." };
+  }
+
+  const createdAt = new Date().toISOString();
+  if (context.demo) {
+    return {
+      ok: true,
+      demo: true,
+      comment: {
+        id: `demo-comment-${Date.now()}`,
+        body,
+        authorId: context.userId,
+        authorName: context.name,
+        authorAvatarUrl: context.avatarUrl,
+        createdAt,
+      },
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: workItem } = await supabase
+    .from("work_items")
+    .select("id, project_id")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", workItemId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (!workItem) return { ok: false, error: "Card não encontrado neste workspace." };
+
+  const { data: created, error } = await supabase
+    .from("work_item_comments")
+    .insert({
+      workspace_id: context.workspaceId,
+      work_item_id: workItemId,
+      author_id: context.userId,
+      body,
+    })
+    .select("id, body, author_id, created_at")
+    .single();
+  const migrationMessage = workItemCollaborationMigrationMessage(error);
+  if (migrationMessage) return { ok: false, error: migrationMessage };
+  if (error || !created) return { ok: false, error: "Não foi possível publicar o comentário." };
+
+  await supabase.from("project_activity").insert({
+    workspace_id: context.workspaceId,
+    project_id: workItem.project_id,
+    actor_id: context.userId,
+    action: "work_item_comment_created",
+    entity_type: "work_item_comment",
+    entity_id: created.id,
+    metadata: { summary: "Adicionou um comentário ao card.", work_item_id: workItemId },
+  });
+  revalidateWorkItemViews(workItem.project_id);
+  return {
+    ok: true,
+    comment: {
+      id: created.id,
+      body: created.body,
+      authorId: created.author_id,
+      authorName: context.name,
+      authorAvatarUrl: context.avatarUrl,
+      createdAt: created.created_at,
+    },
+  };
 }
