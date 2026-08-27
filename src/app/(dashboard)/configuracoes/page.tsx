@@ -3,6 +3,7 @@ import { ArrowUpRight, CalendarCheck, Camera, CheckCircle2, Clock3, GitBranch, H
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { requireAuthContext } from "@/lib/auth";
 import { loadAgencyData } from "@/lib/data/agency";
+import { isGoogleCalendarConfigured } from "@/lib/google-calendar/config";
 import { GOOGLE_CALENDAR_NAME } from "@/lib/google-calendar/types";
 
 export default async function SettingsPage() {
@@ -11,6 +12,7 @@ export default async function SettingsPage() {
   const connection = data.calendarConnections[0] ?? null;
   const connected = connection?.status === "connected";
   const canManageCalendar = context.role === "owner" || context.role === "admin";
+  const calendarConfigured = isGoogleCalendarConfigured();
   return (
     <>
       <header className="page-heading"><div><span className="eyebrow">Administração</span><h1>Configurações</h1><p>Equipe, segurança, integrações e preferências do workspace.</p></div></header>
@@ -48,7 +50,7 @@ export default async function SettingsPage() {
           )}
           <article className="panel settings-card">
             <div className="panel-heading"><div><span className="panel-icon teal"><CalendarCheck size={18} /></span><div><h2>Google Agenda</h2><p>Calendário dedicado aos prazos e renovações</p></div></div></div>
-            <div className="integration-row"><div className="integration-logo">31</div><div><strong>{GOOGLE_CALENDAR_NAME}</strong><p>{connected ? connection.accountEmail ? `Conectado a ${connection.accountEmail}` : "Conta Google autorizada com escopo mínimo" : canManageCalendar ? "Nenhuma conta conectada" : "Gerenciado por administradores"}</p></div><span className={`integration-status ${connected ? "connected" : ""}`}>{connected ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{connected ? "Conectado" : "Pendente"}</span>{!connected && canManageCalendar && (context.demo ? <span className="button button-secondary disabled-button" aria-disabled="true">Após configurar</span> : <a className="button button-primary" href="/api/google-calendar/connect">Conectar</a>)}</div>
+            <div className="integration-row"><div className="integration-logo">31</div><div><strong>{GOOGLE_CALENDAR_NAME}</strong><p>{connected ? connection.accountEmail ? `Conectado a ${connection.accountEmail}` : "Conta Google autorizada com escopo mínimo" : canManageCalendar ? calendarConfigured ? "Nenhuma conta conectada" : "Falta Client ID e Secret do OAuth do Google Calendar" : "Gerenciado por administradores"}</p></div><span className={`integration-status ${connected ? "connected" : ""}`}>{connected ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{connected ? "Conectado" : "Pendente"}</span>{!connected && canManageCalendar && (context.demo || !calendarConfigured ? <span className="button button-secondary disabled-button" aria-disabled="true">{calendarConfigured ? "Após configurar" : "Falta o OAuth"}</span> : <a className="button button-primary" href="/api/google-calendar/connect">Conectar</a>)}</div>
           </article>
         </div>
         <aside className="settings-side">

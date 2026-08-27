@@ -2,6 +2,43 @@ import { APP_NAME } from "../domain/constants";
 
 export const GOOGLE_CALENDAR_SCOPE =
   "https://www.googleapis.com/auth/calendar.app.created" as const;
+export const GOOGLE_CALENDAR_FULL_SCOPE =
+  "https://www.googleapis.com/auth/calendar" as const;
+export const GOOGLE_CALENDAR_CALENDARS_SCOPE =
+  "https://www.googleapis.com/auth/calendar.calendars" as const;
+export const GOOGLE_CALENDAR_READONLY_SCOPE =
+  "https://www.googleapis.com/auth/calendar.readonly" as const;
+export const GOOGLE_CALENDAR_CALENDARS_READONLY_SCOPE =
+  "https://www.googleapis.com/auth/calendar.calendars.readonly" as const;
+
+/**
+ * Scopes asked at connect time. Readonly variants can GET a calendar but
+ * cannot create events, so they are not requested.
+ */
+export const GOOGLE_CALENDAR_REQUESTED_SCOPES = [
+  GOOGLE_CALENDAR_SCOPE,
+  GOOGLE_CALENDAR_CALENDARS_SCOPE,
+  GOOGLE_CALENDAR_FULL_SCOPE,
+] as const;
+
+export const GOOGLE_CALENDAR_WRITE_SCOPES = [
+  GOOGLE_CALENDAR_SCOPE,
+  GOOGLE_CALENDAR_CALENDARS_SCOPE,
+  GOOGLE_CALENDAR_FULL_SCOPE,
+] as const;
+
+export function googleCalendarAuthorizationScope(): string {
+  return GOOGLE_CALENDAR_REQUESTED_SCOPES.join(" ");
+}
+
+export function hasCalendarWriteScope(
+  scope: string | readonly string[],
+): boolean {
+  const granted =
+    typeof scope === "string" ? scope.split(/\s+/).filter(Boolean) : [...scope];
+  if (!granted.length) return true;
+  return GOOGLE_CALENDAR_WRITE_SCOPES.some((needed) => granted.includes(needed));
+}
 
 export const GOOGLE_CALENDAR_NAME = `${APP_NAME} — Prazos`;
 export const GOOGLE_CALENDAR_TIME_ZONE = "America/Sao_Paulo" as const;

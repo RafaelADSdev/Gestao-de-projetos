@@ -2,6 +2,7 @@ import { AlertCircle, CalendarCheck, CalendarDays, CheckCircle2, Clock3, Externa
 import { requireAuthContext } from "@/lib/auth";
 import { loadAgencyData } from "@/lib/data/agency";
 import { buildAgenda } from "@/lib/data/view-models";
+import { isGoogleCalendarConfigured } from "@/lib/google-calendar/config";
 import { GOOGLE_CALENDAR_NAME } from "@/lib/google-calendar/types";
 
 export default async function CalendarPage() {
@@ -11,6 +12,7 @@ export default async function CalendarPage() {
   const connection = data.calendarConnections[0] ?? null;
   const connected = connection?.status === "connected";
   const canManageCalendar = context.role === "owner" || context.role === "admin";
+  const calendarConfigured = isGoogleCalendarConfigured();
   const pendingCount = data.calendarSyncQueue.filter((job) => job.state === "pending" || job.state === "processing").length;
   const failedCount = data.calendarSyncQueue.filter((job) => job.state === "failed").length;
   return (
@@ -37,8 +39,8 @@ export default async function CalendarPage() {
           <article className="panel connection-card">
             <span className={`connection-icon ${connected ? "connected" : ""}`}><CalendarCheck size={24} /></span>
             <h2>{connected ? "Google Agenda conectado" : canManageCalendar ? "Conecte o Google Agenda" : "Agenda administrada pela equipe"}</h2>
-            <p>{connected ? `Eventos enviados para ${connection.calendarName}. ${pendingCount} pendente(s) e ${failedCount} falha(s).` : canManageCalendar ? `Criaremos um calendário separado chamado “${GOOGLE_CALENDAR_NAME}”.` : "Você acompanha os prazos aqui; um administrador cuida da conexão e dos reenvios."}</p>
-            {connected ? <form action="/api/google-calendar/sync" method="post"><button className="button button-secondary button-block" type="submit"><RefreshCw size={15} /> Sincronizar agora</button></form> : context.demo || !canManageCalendar ? <span className="button button-secondary button-block disabled-button" aria-disabled="true">{canManageCalendar ? "Disponível após configurar" : "Somente administradores"}</span> : <a className="button button-primary button-block" href="/api/google-calendar/connect">Conectar conta Google</a>}
+            <p>{connected ? `Eventos enviados para ${connection.calendarName}. ${pendingCount} pendente(s) e ${failedCount} falha(s).` : canManageCalendar ? calendarConfigured ? `Criaremos um calendário separado chamado “${GOOGLE_CALENDAR_NAME}”.` : "O código já usa a Calendar API v3. Falta o Client ID e o Secret do OAuth no ambiente." : "Você acompanha os prazos aqui; um administrador cuida da conexão e dos reenvios."}</p>
+            {connected ? <form action="/api/google-calendar/sync" method="post"><button className="button button-secondary button-block" type="submit"><RefreshCw size={15} /> Sincronizar agora</button></form> : context.demo || !canManageCalendar || !calendarConfigured ? <span className="button button-secondary button-block disabled-button" aria-disabled="true">{canManageCalendar ? calendarConfigured ? "Disponível após configurar" : "Falta o OAuth do Google" : "Somente administradores"}</span> : <a className="button button-primary button-block" href="/api/google-calendar/connect">Conectar conta Google</a>}
             <small>Somente proprietários e administradores podem alterar esta integração.</small>
           </article>
           <article className="panel reminder-card"><h3>Alertas configurados</h3><div><span><CalendarDays size={15} />Prazos</span><strong>D-7 · D-2 · no dia</strong></div><div><span><RefreshCw size={15} />Renovações</span><strong>D-30 · D-7 · D-1</strong></div></article>

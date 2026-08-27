@@ -85,8 +85,15 @@ supabase db lint --level warning --local
 ## Configuração do Google Agenda
 
 Crie outro cliente OAuth no Google Cloud para a integração do calendário. Ele
-é independente do login e pede somente o escopo
-`https://www.googleapis.com/auth/calendar.app.created`.
+é independente do login. Na tela de consentimento, cadastre estes escopos de
+escrita (nessa ordem; o app aceita qualquer um deles):
+
+- `https://www.googleapis.com/auth/calendar.app.created`
+- `https://www.googleapis.com/auth/calendar.calendars`
+- `https://www.googleapis.com/auth/calendar`
+
+`calendar.readonly` e `calendar.calendars.readonly` servem só para ler a agenda
+e **não** exportam eventos; por isso não são pedidos no OAuth.
 
 - Redirect local: `http://localhost:3000/api/google-calendar/callback`
 - Redirect de produção: `https://SEU-DOMINIO/api/google-calendar/callback`

@@ -10,7 +10,12 @@ import {
   sealOAuthTransaction,
   validateOAuthCallback,
 } from "./oauth";
-import { GOOGLE_CALENDAR_SCOPE } from "./types";
+import {
+  GOOGLE_CALENDAR_FULL_SCOPE,
+  GOOGLE_CALENDAR_READONLY_SCOPE,
+  GOOGLE_CALENDAR_SCOPE,
+  googleCalendarAuthorizationScope,
+} from "./types";
 
 const config: GoogleCalendarConfig = {
   clientId: "client-id",
@@ -20,7 +25,7 @@ const config: GoogleCalendarConfig = {
 };
 
 describe("Google OAuth", () => {
-  it("requests only the app-created calendar scope and uses PKCE", () => {
+  it("requests write scopes with PKCE, including full calendar as fallback", () => {
     const transaction = createOAuthTransaction({
       userId: "user-1",
       workspaceId: "workspace-1",
@@ -29,7 +34,10 @@ describe("Google OAuth", () => {
     });
     const url = new URL(buildGoogleAuthorizationUrl(config, transaction));
 
-    expect(url.searchParams.get("scope")).toBe(GOOGLE_CALENDAR_SCOPE);
+    expect(url.searchParams.get("scope")).toBe(googleCalendarAuthorizationScope());
+    expect(url.searchParams.get("scope")).toContain(GOOGLE_CALENDAR_SCOPE);
+    expect(url.searchParams.get("scope")).toContain(GOOGLE_CALENDAR_FULL_SCOPE);
+    expect(url.searchParams.get("scope")).not.toContain(GOOGLE_CALENDAR_READONLY_SCOPE);
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("code_challenge")).toBe(
       createCodeChallenge(transaction.codeVerifier),
@@ -99,5 +107,47 @@ describe("Google OAuth", () => {
       refreshToken: "refresh",
       expiresAt: "2026-08-24T13:00:00.000Z",
     });
+  });
+
+  it("accepts the full calendar scope when app.created is missing", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        access_token: "access",
+        refresh_token: "refresh",
+        expires_in: 3600,
+        scope: GOOGLE_CALENDAR_FULL_SCOPE,
+        token_type: "Bearer",
+      }),
+    ) as typeof globalThis.fetch;
+
+    await expect(
+      exchangeAuthorizationCode({
+        config,
+        code: "code",
+        codeVerifier: "verifier",
+        fetch: fetcher,
+        now: new Date("2026-08-24T12:00:00Z"),
+      }),
+    ).resolves.toMatchObject({ accessToken: "access" });
+  });
+
+  it("rejects a readonly-only grant because it cannot export events", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        access_token: "access",
+        expires_in: 3600,
+        scope: GOOGLE_CALENDAR_READONLY_SCOPE,
+        token_type: "Bearer",
+      }),
+    ) as typeof globalThis.fetch;
+
+    await expect(
+      exchangeAuthorizationCode({
+        config,
+        code: "code",
+        codeVerifier: "verifier",
+        fetch: fetcher,
+      }),
+    ).rejects.toThrow(/permissão mínima/);
   });
 });

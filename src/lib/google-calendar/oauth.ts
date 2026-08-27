@@ -4,6 +4,8 @@ import { constantTimeEqual, decryptSecret, encryptSecret } from "./crypto";
 import { GoogleCalendarError } from "./errors";
 import {
   GOOGLE_CALENDAR_SCOPE,
+  googleCalendarAuthorizationScope,
+  hasCalendarWriteScope,
   type GoogleCalendarConfig,
   type GoogleTokenSet,
   type OAuthTransaction,
@@ -43,7 +45,7 @@ export function buildGoogleAuthorizationUrl(
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: GOOGLE_CALENDAR_SCOPE,
+    scope: googleCalendarAuthorizationScope(),
     access_type: "offline",
     prompt: "consent",
     state: transaction.state,
@@ -227,8 +229,7 @@ function parseTokenResponse(
       502,
     );
   }
-  const grantedScopes = scope.split(/\s+/).filter(Boolean);
-  if (scope && !grantedScopes.includes(GOOGLE_CALENDAR_SCOPE)) {
+  if (scope && !hasCalendarWriteScope(scope)) {
     throw new GoogleCalendarError(
       "A permissão mínima do Google Agenda não foi concedida.",
       "google_scope_not_granted",
